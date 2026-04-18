@@ -53,12 +53,25 @@ _GEO_BASE = "https://ftp.ncbi.nlm.nih.gov/geo/series"
 # Title or filename keywords that indicate a feature-barcoding sample.
 # Matched case-insensitively as word-ish substrings (token boundary
 # enforced by surrounding ``[\W_]`` so "MULTI" doesn't match "multiple").
+# BCR/TCR/VDJ are included because V(D)J immune-repertoire sequencing is
+# a feature modality paired with GEX by the same library-prep kit (10x
+# does them in the same run as hashing/CITE).
 _FEAT_KEYWORDS = (
     "hash", "hto", "adt", "cite", "cellplex", "feature_barc",
     "multi_tag", "hash_tag", "tagmtx", "hashtag",
+    "_bcr", "_tcr", "_vdj",
 )
 _FEAT_TITLE_RE = re.compile(
-    r"(?:^|[^A-Za-z])(MULTI|HASH|HTO|ADT|CITE)(?:$|[^A-Za-z])",
+    r"(?:^|[^A-Za-z])(MULTI|HASH|HTO|ADT|CITE|BCR|TCR|VDJ)(?:$|[^A-Za-z])",
+    re.IGNORECASE,
+)
+
+# Modality tokens often embedded in GEO sample titles like
+# "C12_R_10x_scRNA", "C12_R_10x_BCR". The library stem is whatever
+# precedes the trailing ``_(10x_)?<modality>`` — exercised as a fallback
+# when filename-suffix stripping doesn't recognise the submitter's naming.
+_TITLE_STEM_RE = re.compile(
+    r"^(?P<stem>.+?)_(?:10x_)?(?P<modality>scRNA|GEX|RNA|BCR|TCR|VDJ|HASH|HTO|ADT|CITE|MULTI)(?:-seq)?$",
     re.IGNORECASE,
 )
 
@@ -298,14 +311,13 @@ def _annotate_feature_types_and_libraries(
                 confidence=0.75,
             )
 
-    # 2. Library stem extraction.
+    # 2. Library stem extraction. Filenames first (strict, high-confidence
+    # when they match a canonical suffix); fall back to Sample_title when
+    # the submitter uses a bespoke filename pattern but a clean title like
+    # ``C12_R_10x_scRNA`` / ``C12_R_10x_BCR``.
     stems: dict[str, str] = {}  # sample_id -> stem
     for s in samples:
         fnames = [u.rsplit("/", 1)[-1] for u in url_map.get(s.sample_id, [])]
-        if not fnames:
-            continue
-        # Try every file; first non-None stem wins. Different files of the
-        # same library should collapse to the same stem.
         for fname in fnames:
             stem = _library_stem(fname)
             if stem:
@@ -314,6 +326,18 @@ def _annotate_feature_types_and_libraries(
                     stem, f"heuristic: stripped suffix from {fname!r}", confidence=0.85,
                 )
                 break
+        if s.sample_id not in stems:
+            title_pv = s.extra.get("title")
+            if title_pv:
+                m = _TITLE_STEM_RE.match(str(title_pv.value))
+                if m:
+                    stem = m.group("stem")
+                    stems[s.sample_id] = stem
+                    s.extra["library"] = _pv(
+                        stem,
+                        f"heuristic: stripped ``_10x_{m.group('modality')}`` from Sample_title",
+                        confidence=0.75,
+                    )
 
     # 3. Companion linking: when a library has both a GEX and a
     # feature-barcoding sample, record the cross-refs.

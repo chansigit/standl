@@ -273,6 +273,43 @@ def test_feature_type_classifier():
     assert _looks_like_feature_barcoding("multiplexed donors, scRNA-seq", []) is False
     # Pure 10x triplet → no match.
     assert _looks_like_feature_barcoding("PBMC 10x", ["sample_barcodes.tsv.gz"]) is False
+    # V(D)J immune-repertoire: BCR / TCR / VDJ are feature modalities too.
+    assert _looks_like_feature_barcoding("C12_PBMC_10x_BCR", []) is True
+    assert _looks_like_feature_barcoding("C12_PBMC_10x_TCR", []) is True
+    assert _looks_like_feature_barcoding("sample VDJ enrichment", []) is True
+
+
+def test_library_stem_falls_back_to_title_modality(tmp_path):
+    """When filenames don't follow a canonical suffix (real-world
+    submitter variation), Sample_title patterns like
+    ``C12_R_10x_scRNA`` / ``C12_R_10x_BCR`` let us recover the library
+    stem. Emulates GSE125527's naming."""
+    from standl.extractors.geo_soft import _annotate_feature_types_and_libraries
+    from standl.schema import PartialSample, ProvenancedValue
+
+    def _pv(v, ev):
+        return ProvenancedValue(value=v, source="geo-soft", confidence=0.9, evidence=ev)
+
+    gex = PartialSample(sample_id="GSM1")
+    gex.extra["title"] = _pv("C12_R_10x_scRNA", "Sample_title")
+    bcr = PartialSample(sample_id="GSM2")
+    bcr.extra["title"] = _pv("C12_R_10x_BCR", "Sample_title")
+    other = PartialSample(sample_id="GSM3")
+    other.extra["title"] = _pv("D5_PBMC_10x_scRNA", "Sample_title")
+
+    url_map = {"GSM1": ["GSM1_weird-name.tsv.gz"], "GSM2": ["GSM2_weird-bcr.tsv.gz"],
+               "GSM3": ["GSM3_weird-name.tsv.gz"]}
+
+    _annotate_feature_types_and_libraries([gex, bcr, other], url_map)
+
+    assert gex.extra["library"].value == "C12_R"
+    assert bcr.extra["library"].value == "C12_R"
+    assert other.extra["library"].value == "D5_PBMC"
+    # BCR now classified as feature_barcoding.
+    assert bcr.extra["feature_type"].value == "feature_barcoding"
+    # GEX + BCR share stem → companion link wired up.
+    assert gex.extra["companion_samples"].value == "GSM2"
+    assert bcr.extra["companion_of"].value == "GSM1"
 
 
 def test_extract_annotates_feature_type_and_companion_links(tmp_path):
