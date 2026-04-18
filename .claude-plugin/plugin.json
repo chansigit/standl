@@ -1,0 +1,21 @@
+{
+  "name": "standl",
+  "displayName": "standl",
+  "description": "Upstream stan* entry: download single-cell datasets from GEO / CELLxGENE / HCA DCP / BioStudies / Zenodo / Figshare, extract experimental design, cross-validate against audit.md",
+  "version": "0.2.0",
+  "author": {
+    "name": "chansigit"
+  },
+  "homepage": "https://github.com/chansigit/standl",
+  "repository": "https://github.com/chansigit/standl",
+  "license": "MIT",
+  "keywords": [
+    "single-cell",
+    "scRNA-seq",
+    "geo",
+    "cellxgene",
+    "hca",
+    "experimental-design",
+    "bioinformatics"
+  ]
+}
