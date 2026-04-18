@@ -1,0 +1,66 @@
+{
+  "dataset_id": "GSE_FIXTURE_GOOD",
+  "entries": [
+    {
+      "path": "HN01_PBL/barcodes.tsv.gz",
+      "url": "file://synthetic/HN01_PBL/barcodes.tsv.gz",
+      "size_bytes": 13,
+      "sha256": "c30ee783e02f5dc58332bc1ecbfb9e5f94229faf9df68d454aa0ff28a6f9741f",
+      "md5": null,
+      "status": "ok",
+      "downloaded_at": "2026-04-17T00:00:00Z",
+      "source_accession": "GSM4138111"
+    },
+    {
+      "path": "HN01_PBL/features.tsv.gz",
+      "url": "file://synthetic/HN01_PBL/features.tsv.gz",
+      "size_bytes": 13,
+      "sha256": "415ca3d7221a602e6c0c72162a898843076e12047500a9e96254e27c6553a34a",
+      "md5": null,
+      "status": "ok",
+      "downloaded_at": "2026-04-17T00:00:00Z",
+      "source_accession": "GSM4138111"
+    },
+    {
+      "path": "HN01_PBL/matrix.mtx.gz",
+      "url": "file://synthetic/HN01_PBL/matrix.mtx.gz",
+      "size_bytes": 11,
+      "sha256": "0b6be4113ae2f453a3ceaee10166f77188be375e09644a16cede9d14a7da5694",
+      "md5": null,
+      "status": "ok",
+      "downloaded_at": "2026-04-17T00:00:00Z",
+      "source_accession": "GSM4138111"
+    },
+    {
+      "path": "HN01_Tumor/barcodes.tsv.gz",
+      "url": "file://synthetic/HN01_Tumor/barcodes.tsv.gz",
+      "size_bytes": 15,
+      "sha256": "5046023014873dfe832f6b2ecfd4f78ddf17c8adc6c0154f9a8fb53cc6e1e007",
+      "md5": null,
+      "status": "ok",
+      "downloaded_at": "2026-04-17T00:00:00Z",
+      "source_accession": "GSM4138110"
+    },
+    {
+      "path": "HN01_Tumor/features.tsv.gz",
+      "url": "file://synthetic/HN01_Tumor/features.tsv.gz",
+      "size_bytes": 15,
+      "sha256": "55de206d02a8719b401e88808665e171f9ff6d84068942137393e6ff7b9dbe02",
+      "md5": null,
+      "status": "ok",
+      "downloaded_at": "2026-04-17T00:00:00Z",
+      "source_accession": "GSM4138110"
+    },
+    {
+      "path": "HN01_Tumor/matrix.mtx.gz",
+      "url": "file://synthetic/HN01_Tumor/matrix.mtx.gz",
+      "size_bytes": 13,
+      "sha256": "227209825b27ab123eb7f3110d4ce4dd3ac197e745d4c97850091bfa4c925f5d",
+      "md5": null,
+      "status": "ok",
+      "downloaded_at": "2026-04-17T00:00:00Z",
+      "source_accession": "GSM4138110"
+    }
+  ],
+  "created_at": "2026-04-17T00:00:00Z"
+}

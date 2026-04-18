@@ -1,0 +1,47 @@
+dataset_id: GSE139324
+source:
+  paper_doi: 10.1038/s41591-019-0750-6
+  paper_url: https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7001144/
+  accessions: [GSE139324]
+  repositories: [GEO]
+
+organism: Homo sapiens
+assay: 10x Chromium v2
+
+samples:
+  - sample_id: HN01_Tumor
+    accession: GSM4138110
+    files: [HN01_Tumor/matrix.mtx.gz, HN01_Tumor/barcodes.tsv.gz, HN01_Tumor/features.tsv.gz]
+    tissue: head and neck squamous cell carcinoma
+    tissue_ontology: UBERON:0002107
+    disease: HNSCC
+    donor_id: HN01
+    condition: tumor
+    replicate: rep1
+
+  - sample_id: HN01_PBL
+    accession: GSM4138111
+    files: [HN01_PBL/matrix.mtx.gz, HN01_PBL/barcodes.tsv.gz, HN01_PBL/features.tsv.gz]
+    tissue: peripheral blood
+    tissue_ontology: UBERON:0000178
+    donor_id: HN01
+    condition: pbl
+    replicate: rep1
+
+factors:
+  - name: condition
+    levels: [tumor, pbl]
+    reference: pbl
+
+contrasts:
+  - name: tumor_vs_pbl
+    numerator: {condition: tumor}
+    denominator: {condition: pbl}
+    source: "Figure 1c"
+
+batches: [donor_id]
+
+extraction:
+  methods: [geo-soft, llm-paper]
+  extracted_at: 2026-04-17T00:00:00Z
+  notes: per-field attribution (model, confidence, source file) in provenance.json
