@@ -1,0 +1,18 @@
+{
+  "dataset_id": "GSE234903",
+  "chain": [
+    "standl-run",
+    "stanobj",
+    "stangene",
+    "concat",
+    "standl-validate"
+  ],
+  "per_sample_harmonized": [
+    "/tmp/gse234903/standardized_chain/stangene/GSM7476348_harmonized.h5ad",
+    "/tmp/gse234903/standardized_chain/stangene/GSM7476349_harmonized.h5ad",
+    "/tmp/gse234903/standardized_chain/stangene/GSM7476350_harmonized.h5ad",
+    "/tmp/gse234903/standardized_chain/stangene/GSM7476351_harmonized.h5ad",
+    "/tmp/gse234903/standardized_chain/stangene/GSM7476352_harmonized.h5ad"
+  ],
+  "combined": "/tmp/gse234903/standardized_chain/combined.h5ad"
+}
