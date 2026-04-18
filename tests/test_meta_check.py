@@ -170,17 +170,37 @@ def test_meta_check_runs_without_existing_design_yaml(tmp_path: Path, make_h5ad)
 # -------- paper extractor best-effort --------
 
 def test_meta_check_records_unimplemented_paper_extractors(good: Path, tmp_path: Path, make_h5ad):
-    """If paper_source triggers an extractor that's still a stub, we must
-    record a warn and keep going — not abort the run."""
+    """Extractors still stubbed (NotImplementedError) must surface as a warn,
+    never crash the run. ``llm-paper`` is still a stub as of step 3, so a DOI
+    source triggers it and exercises the raise → warn path."""
     pytest.importorskip("anndata")
     from standl.modes import meta_check
     from standl.schema import Source
     h5ad = make_h5ad(tmp_path / "data.h5ad", ["HN01_Tumor", "HN01_PBL"])
 
-    # GEO accession makes geo-soft fire; geo-soft.extract raises NotImplementedError.
-    report = meta_check(good, h5ad=h5ad, paper_source=Source(accessions=["GSE_FIXTURE_GOOD"]))
+    report = meta_check(good, h5ad=h5ad, paper_source=Source(paper_doi="10.1234/stubbed"))
     assert any(
-        r.check == "paper_extractor_skipped" and "geo-soft" in r.message
+        r.check == "paper_extractor_skipped" and "llm-paper" in r.message
+        for r in report.records
+    )
+
+
+def test_meta_check_surfaces_geo_soft_partial_failures(
+    good: Path, tmp_path: Path, make_h5ad, monkeypatch,
+):
+    """When an extractor returns a PartialDesign with ``failures`` (succeeded
+    partially — e.g. SOFT couldn't be fetched), meta_check must surface each
+    failure as an ``extractor_partial_failure`` warn."""
+    pytest.importorskip("anndata")
+    from standl.modes import meta_check
+    from standl.schema import Source
+    from standl.extractors import geo_soft as gs
+    monkeypatch.setattr(gs, "_fetch_soft", lambda *a, **k: None)
+    h5ad = make_h5ad(tmp_path / "data.h5ad", ["HN01_Tumor", "HN01_PBL"])
+
+    report = meta_check(good, h5ad=h5ad, paper_source=Source(accessions=["GSE111111"]))
+    assert any(
+        r.check == "extractor_partial_failure" and "geo-soft" in r.message
         for r in report.records
     )
 

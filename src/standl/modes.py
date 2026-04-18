@@ -570,6 +570,20 @@ def meta_check(
             {"extractor": name, "reason": reason},
         ))
 
+    # Surface per-field PartialDesign.failures from each extractor so users see
+    # which specific fields a (successful) extractor couldn't fill. Separate from
+    # paper_extractor_skipped, which is about extractors that didn't produce a
+    # PartialDesign at all.
+    for p in partials:
+        if not p.failures:
+            continue
+        for field_name, reason in sorted(p.failures.items()):
+            report.add(_warn(
+                "extractor_partial_failure",
+                f"{p.extractor!r} could not extract {field_name!r}: {reason}",
+                {"extractor": p.extractor, "field": field_name, "reason": reason},
+            ))
+
     if write_design:
         (dataset_dir / "design.yaml").write_text(
             yaml.safe_dump(
