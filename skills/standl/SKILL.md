@@ -110,6 +110,49 @@ If the user hands you a DOI with no GEO accession in the paper:
 Papers that deposit only to controlled-access repositories (dbGaP, EGA) are
 **out of scope** for standl — flag to the user.
 
+## Rescue flow: `data_layout` failure (pooled series-level data)
+
+When `audit.md` reports
+
+    FAIL — extractor_partial_failure
+    - 'geo-soft' could not extract 'data_layout': no sample-level supplementary
+      files; data is pooled at Series_supplementary_file (N file(s))...
+
+the dataset's processed data lives *at the series level* as a single matrix
+covering all samples, split by cell-barcode suffix (GEO writes
+`!Sample_supplementary_file_1 = NONE` in each ^SAMPLE block). `standl run`
+won't auto-split — you rescue it:
+
+1. **Find the series URLs.** Read `<dir>/design.yaml` — `notes` ends with
+   `series_supplementary_files: <url1>; <url2>; ...`. These are the pooled
+   files (typical 10x set: matrix.mtx.gz + barcodes.tsv.gz + features.tsv.gz).
+2. **Download them to `<dir>/paper/`** via `standl.fetch.download`:
+   ```python
+   from pathlib import Path
+   from standl.fetch import download
+   for url in SERIES_URLS:
+       download(url, Path("<dir>/paper") / url.rsplit("/", 1)[-1])
+   ```
+   Idempotent — re-running short-circuits on sha256.
+3. **Load the pooled matrix** (scanpy / anndata) from `<dir>/paper/`.
+4. **Split by barcode suffix.** GEO's convention is that cells from sample
+   N end in `-N` (check the paper's Data Processing for the mapping —
+   sometimes explicit "Sample 1 : AAAC...-1 ~ TTTGT...-1" in the SOFT's
+   `Sample_data_processing` field). Extract the mapping and slice the
+   AnnData per sample.
+5. **Write per-sample h5ad (or mtx triples) under `<dir>/raw/<sample_id>/`**.
+   Prefer h5ad — one file per sample matches the downstream `stanobj` flow.
+6. **Rewrite `<dir>/design.yaml`**: set each sample's `files` to the newly
+   written relative paths, and record the pool-split provenance in
+   `notes` (`"split from <pooled URL> by barcode suffix"`).
+7. **Update `<dir>/manifest.json`**: one entry per written file with
+   `status: ok`, real size, and sha256 (compute via `hashlib`).
+8. **Re-run `standl validate <dir>`** — audit.md should now be all `ok`.
+
+Do not silently shim around `data_layout`. If the user asked for
+`standl run GSE…` and you produced a split dataset via a rescue, say so in
+the final message so they know the data isn't straight from GEO.
+
 ## Cross-validation checklist
 
 When producing / updating `audit.md`, these nine checks are what `validate`
