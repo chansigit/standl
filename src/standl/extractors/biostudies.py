@@ -124,6 +124,37 @@ def _is_raw_only(name: str) -> bool:
     return False
 
 
+_SLUG_UNSAFE = re.compile(r"[^A-Za-z0-9._-]+")
+
+
+def _slug(label: str) -> str:
+    """Slugify a BioStudies ``Samples`` label for use as a sample_id suffix."""
+    s = _SLUG_UNSAFE.sub("_", (label or "").strip()).strip("_")
+    return s or "unassigned"
+
+
+def _group_files_by_samples(
+    all_data: list[dict[str, Any]],
+) -> tuple[dict[str, list[dict[str, Any]]], int]:
+    """Group files by their ``Samples`` field. Returns
+    ``(groups, raw_count_total)`` where ``groups`` maps ``Samples`` value
+    (empty string retained) → list of non-raw file records."""
+    groups: dict[str, list[dict[str, Any]]] = {}
+    raw_count = 0
+    for f in all_data:
+        if not isinstance(f, dict):
+            continue
+        name = f.get("path") or f.get("Name") or ""
+        if not name:
+            continue
+        if _is_raw_only(name):
+            raw_count += 1
+            continue
+        label = (f.get("Samples") or "").strip()
+        groups.setdefault(label, []).append(f)
+    return groups, raw_count
+
+
 class BioStudiesExtractor:
     name = "biostudies"
 
@@ -175,6 +206,52 @@ class BioStudiesExtractor:
         return _build_partial(study, files_resp, accession)
 
 
+def _build_sample(
+    accession: str, sample_id: str, label: str | None,
+    files: list[dict[str, Any]],
+    organism_pv: ProvenancedValue[str] | None,
+    merged_attrs: dict[str, str],
+) -> tuple[PartialSample, list[str], list[dict]]:
+    """Build a PartialSample + its url_map + file_meta lists for one group."""
+    sample = PartialSample(sample_id=sample_id)
+    sample.accession = _pv(accession, "biostudies accession", confidence=1.0)
+    if organism_pv:
+        sample.organism = organism_pv
+    if label:
+        sample.extra["biostudies_samples_field"] = _pv(label, "files[*].Samples")
+    for key_lc, extra_key in (
+        ("title", "title"),
+        ("study type", "study_type"),
+        ("description", "description"),
+        ("releasedate", "release_date"),
+    ):
+        v = merged_attrs.get(key_lc)
+        if v:
+            sample.extra[extra_key] = _pv(str(v)[:500], f"attributes.{extra_key}")
+
+    rel_paths: list[str] = []
+    urls: list[str] = []
+    metas: list[dict] = []
+    for f in files:
+        path = f.get("path") or f.get("Name")
+        rel_paths.append(f"{sample_id}/{path}")
+        urls.append(f"{FILES_BASE}/{accession}/{path}")
+        meta: dict = {}
+        if (sz := f.get("size")) is not None:
+            try:
+                meta["size_bytes"] = int(sz)
+            except (TypeError, ValueError):
+                pass
+        metas.append(meta)
+    sample.files = ProvenancedValue(
+        value=rel_paths,
+        source="biostudies",
+        confidence=0.95,
+        evidence="files.data[*].path (raw formats filtered)",
+    )
+    return sample, urls, metas
+
+
 def _build_partial(
     study: dict[str, Any], files_resp: dict[str, Any], accession: str,
 ) -> PartialDesign:
@@ -193,74 +270,70 @@ def _build_partial(
     if (study_type := merged.get("study type")):
         assay_pv = _pv(study_type, "section.attributes.'Study type'", confidence=0.6)
 
-    sample = PartialSample(sample_id=accession)
-    sample.accession = _pv(accession, "biostudies accession", confidence=1.0)
-    if organism_pv:
-        sample.organism = organism_pv
-
-    for key_lc, extra_key in (
-        ("title", "title"),
-        ("study type", "study_type"),
-        ("description", "description"),
-        ("releasedate", "release_date"),
-    ):
-        v = merged.get(key_lc)
-        if v:
-            sample.extra[extra_key] = _pv(str(v)[:500], f"attributes.{extra_key}")
-
     all_data = files_resp.get("data") or []
-    raw_count = 0
-    processed_entries: list[dict[str, Any]] = []
-    for f in all_data:
-        if not isinstance(f, dict):
-            continue
-        name = f.get("path") or f.get("Name") or ""
-        if not name:
-            continue
-        if _is_raw_only(name):
-            raw_count += 1
-            continue
-        processed_entries.append(f)
+    groups, raw_count = _group_files_by_samples(all_data)
 
-    if raw_count:
-        sample.extra["biostudies_raw_file_count"] = _pv(
-            str(raw_count), "files.data (fastq/bam/sra excluded)",
-        )
+    # Drop empty groups, then decide: single vs split.
+    non_empty = {k: v for k, v in groups.items() if v}
+    labels_with_files = [k for k in non_empty if k]  # non-empty labels only
 
+    samples: list[PartialSample] = []
     url_map: dict[str, list[str]] = {}
     file_meta: dict[str, list[dict]] = {}
-    if processed_entries:
-        rel_paths: list[str] = []
-        urls: list[str] = []
-        metas: list[dict] = []
-        for f in processed_entries:
-            path = f.get("path") or f.get("Name")
-            rel_paths.append(f"{accession}/{path}")
-            urls.append(f"{FILES_BASE}/{accession}/{path}")
-            # BioStudies exposes size but no checksum on /api/v1/files.
-            meta: dict = {}
-            if (sz := f.get("size")) is not None:
-                try:
-                    meta["size_bytes"] = int(sz)
-                except (TypeError, ValueError):
-                    pass
-            metas.append(meta)
-        sample.files = ProvenancedValue(
-            value=rel_paths,
-            source="biostudies",
-            confidence=0.95,
-            evidence="files.data[*].path (raw formats filtered)",
+
+    if len(labels_with_files) >= 2:
+        # Real per-sample grouping — emit one PartialSample per distinct label.
+        # Files with empty Samples (shared / study-level) attach to a sibling
+        # "_unassigned" sample so they don't get silently dropped.
+        for label, files in non_empty.items():
+            sid = f"{accession}_{_slug(label)}" if label else f"{accession}_unassigned"
+            s, urls, metas = _build_sample(accession, sid, label or None, files, organism_pv, merged)
+            samples.append(s)
+            url_map[sid] = urls
+            file_meta[sid] = metas
+    elif non_empty:
+        # Only one labelled group (or none — just empty-Samples files) —
+        # keep the historical behaviour: a single PartialSample keyed by the
+        # accession, holding every non-raw file whatever its Samples label.
+        merged_files = [f for files in non_empty.values() for f in files]
+        label = labels_with_files[0] if labels_with_files else None
+        s, urls, metas = _build_sample(
+            accession, accession, label, merged_files, organism_pv, merged,
         )
+        samples.append(s)
         url_map[accession] = urls
         file_meta[accession] = metas
-    elif all_data:
-        failures["data_format"] = (
-            f"only raw-sequencing formats available ({raw_count} fastq/bam/sra file(s)); "
-            f"SRA/ENA processing is out of scope for standl. See ENA/SRA or a "
-            f"processed-matrix deposit."
-        )
     else:
-        failures["files"] = "no files listed on BioStudies for this study"
+        # No processed files at all — either fastq-only or truly empty.
+        if all_data:
+            failures["data_format"] = (
+                f"only raw-sequencing formats available ({raw_count} fastq/bam/sra file(s)); "
+                f"SRA/ENA processing is out of scope for standl. See ENA/SRA or a "
+                f"processed-matrix deposit."
+            )
+        else:
+            failures["files"] = "no files listed on BioStudies for this study"
+        # Still emit a study-level PartialSample so downstream consumers can
+        # surface the failure alongside metadata.
+        s = PartialSample(sample_id=accession)
+        s.accession = _pv(accession, "biostudies accession", confidence=1.0)
+        if organism_pv:
+            s.organism = organism_pv
+        for key_lc, extra_key in (
+            ("title", "title"),
+            ("study type", "study_type"),
+            ("description", "description"),
+        ):
+            v = merged.get(key_lc)
+            if v:
+                s.extra[extra_key] = _pv(str(v)[:500], f"attributes.{extra_key}")
+        samples.append(s)
+
+    if raw_count:
+        for s in samples:
+            s.extra["biostudies_raw_file_count"] = _pv(
+                str(raw_count), "files.data (fastq/bam/sra excluded)",
+            )
 
     title = merged.get("title")
 
@@ -273,7 +346,7 @@ def _build_partial(
         ),
         organism=organism_pv,
         assay=assay_pv,
-        samples=[sample],
+        samples=samples,
         url_map=url_map,
         file_meta=file_meta,
         failures=failures,

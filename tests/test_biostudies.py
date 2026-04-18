@@ -185,6 +185,80 @@ def test_extract_records_failure_on_empty_files(monkeypatch, tmp_path: Path):
     assert partial.failures
 
 
+SPLIT_FILES = {
+    "draw": 1,
+    "recordsTotal": 4,
+    "data": [
+        # Two distinct Samples → should trigger per-sample split.
+        {"Name": "donorA_matrix.h5ad", "Size": "100", "Section": "processed-data",
+         "Samples": "Donor A", "path": "donorA_matrix.h5ad",
+         "type": "file", "size": 100},
+        {"Name": "donorA_meta.tsv", "Size": "10", "Section": "metadata",
+         "Samples": "Donor A", "path": "donorA_meta.tsv",
+         "type": "file", "size": 10},
+        {"Name": "donorB_matrix.h5ad", "Size": "120", "Section": "processed-data",
+         "Samples": "Donor B", "path": "donorB_matrix.h5ad",
+         "type": "file", "size": 120},
+        # A study-level file with empty Samples — goes to _unassigned bucket.
+        {"Name": "README.md", "Size": "4096", "Section": "metadata",
+         "Samples": "", "path": "README.md",
+         "type": "file", "size": 4096},
+    ],
+}
+
+
+def test_extract_splits_on_multiple_samples(monkeypatch, tmp_path: Path):
+    """When files[].Samples has ≥2 distinct labels, emit one PartialSample
+    per label. Files without a Samples label go to an ``_unassigned`` bucket
+    so they don't silently vanish."""
+    from standl.extractors import biostudies as bs
+    monkeypatch.setattr(bs, "_fetch_study", lambda acc, cache_dir: FAKE_STUDY)
+    monkeypatch.setattr(bs, "_fetch_files", lambda acc, cache_dir: SPLIT_FILES)
+
+    partial = _ex().extract(Source(accessions=[ACC]), cache_dir=tmp_path)
+    ids = sorted(s.sample_id for s in partial.samples)
+    assert ids == [f"{ACC}_Donor_A", f"{ACC}_Donor_B", f"{ACC}_unassigned"]
+
+    by_id = {s.sample_id: s for s in partial.samples}
+    donor_a_files = by_id[f"{ACC}_Donor_A"].files.value
+    assert any("donorA_matrix.h5ad" in f for f in donor_a_files)
+    assert any("donorA_meta.tsv" in f for f in donor_a_files)
+    assert len(donor_a_files) == 2
+
+    donor_b_files = by_id[f"{ACC}_Donor_B"].files.value
+    assert any("donorB_matrix.h5ad" in f for f in donor_b_files)
+    assert len(donor_b_files) == 1
+
+    readme_sample = by_id[f"{ACC}_unassigned"]
+    assert any("README.md" in f for f in readme_sample.files.value)
+
+    # The Samples label is recorded per-sample for traceability.
+    assert by_id[f"{ACC}_Donor_A"].extra["biostudies_samples_field"].value == "Donor A"
+
+
+def test_extract_single_label_groups_merge_back(monkeypatch, tmp_path: Path):
+    """With only one non-empty Samples label, the output stays a single
+    accession-keyed PartialSample (no split) — mixing in with any empty-
+    labelled files so nothing drops."""
+    from standl.extractors import biostudies as bs
+    fake_files = {
+        "data": [
+            {"Name": "a.h5ad", "Section": "processed-data", "Samples": "OnlyDonor",
+             "path": "a.h5ad", "type": "file", "size": 1},
+            {"Name": "readme.txt", "Section": "metadata", "Samples": "",
+             "path": "readme.txt", "type": "file", "size": 2},
+        ],
+    }
+    monkeypatch.setattr(bs, "_fetch_study", lambda acc, cache_dir: FAKE_STUDY)
+    monkeypatch.setattr(bs, "_fetch_files", lambda acc, cache_dir: fake_files)
+
+    partial = _ex().extract(Source(accessions=[ACC]), cache_dir=tmp_path)
+    assert len(partial.samples) == 1
+    assert partial.samples[0].sample_id == ACC
+    names = " ".join(partial.samples[0].files.value)
+    assert "a.h5ad" in names and "readme.txt" in names
+
+
 def test_extract_populates_file_meta_size_only(monkeypatch, tmp_path: Path):
     """BioStudies /files endpoint exposes size but not md5/sha256 — file_meta
     should carry size_bytes and omit the rest."""
