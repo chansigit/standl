@@ -22,8 +22,9 @@ from pathlib import Path
 from typing import Any
 
 from ..schema import PartialDesign, PartialSample, ProvenancedValue, Source
-from .base import register
+from .base import make_pv, register
 
+_pv = make_pv("zenodo", default_confidence=0.9)
 
 API_BASE = "https://zenodo.org/api/records"
 _ZENODO_DOI_RE = re.compile(r"^10\.5281/zenodo\.(\d+)$", re.IGNORECASE)
@@ -31,10 +32,6 @@ _ZENODO_URL_RE = re.compile(
     r"zenodo\.org/(?:record|records)/(\d+)",
     re.IGNORECASE,
 )
-
-
-def _pv(value: str, evidence: str, confidence: float = 0.9) -> ProvenancedValue[str]:
-    return ProvenancedValue(value=value, source="zenodo", confidence=confidence, evidence=evidence)
 
 
 def _extract_record_id(source: Source) -> str | None:

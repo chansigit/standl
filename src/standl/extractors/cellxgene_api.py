@@ -30,8 +30,9 @@ from pathlib import Path
 from typing import Any
 
 from ..schema import PartialDesign, PartialSample, ProvenancedValue, Source
-from .base import register
+from .base import make_pv, register
 
+_pv = make_pv("cellxgene-api", default_confidence=0.9)
 
 API_BASE = "https://api.cellxgene.cziscience.com"
 _UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
@@ -43,12 +44,6 @@ _DATASET_URL_RE = re.compile(
     r"cellxgene\.cziscience\.com/datasets/([0-9a-f-]{36})",
     re.IGNORECASE,
 )
-
-
-def _pv(value: str, evidence: str, confidence: float = 0.9) -> ProvenancedValue[str]:
-    return ProvenancedValue(
-        value=value, source="cellxgene-api", confidence=confidence, evidence=evidence,
-    )
 
 
 def _extract_dataset_uuid(source: Source) -> str | None:

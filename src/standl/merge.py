@@ -48,7 +48,9 @@ DEFAULT_PRIORITY = {
     "h5ad-observed": 95,
     "cellxgene-api": 90,
     "hca-dcp": 90,
-    "arrayexpress": 85,
+    "biostudies": 85,
+    "zenodo": 60,
+    "figshare": 60,
 }
 
 

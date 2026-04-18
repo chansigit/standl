@@ -16,8 +16,9 @@ from pathlib import Path
 from typing import Any
 
 from ..schema import PartialDesign, PartialSample, ProvenancedValue, Source
-from .base import register
+from .base import make_pv, register
 
+_pv = make_pv("figshare", default_confidence=0.9)
 
 API_BASE = "https://api.figshare.com/v2/articles"
 # Matches both "10.6084/m9.figshare.12345" and "10.6084/m9.figshare.12345.v3".
@@ -29,10 +30,6 @@ _FIGSHARE_URL_RE = re.compile(
     r"figshare\.com/articles/(?:[^/]+/)?(?:[^/]+/)?(\d+)",
     re.IGNORECASE,
 )
-
-
-def _pv(value: str, evidence: str, confidence: float = 0.9) -> ProvenancedValue[str]:
-    return ProvenancedValue(value=value, source="figshare", confidence=confidence, evidence=evidence)
 
 
 def _extract_article_id(source: Source) -> str | None:

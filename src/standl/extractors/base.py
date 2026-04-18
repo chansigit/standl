@@ -12,9 +12,34 @@ rather than raising. Only raise for "this is not our kind of source at all".
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Protocol, runtime_checkable
+from typing import Any, Callable, Protocol, runtime_checkable
 
-from ..schema import PartialDesign, Source
+from ..schema import PartialDesign, ProvenancedValue, Source
+
+
+def make_pv(
+    source_name: str, default_confidence: float = 0.9,
+) -> Callable[..., ProvenancedValue[Any]]:
+    """Factory for an extractor-bound ``_pv(value, evidence, confidence=...)``
+    helper. Every concrete extractor uses one of these; hoisting here
+    eliminates the boilerplate re-definition in each module.
+
+    >>> _pv = make_pv("geo-soft", default_confidence=0.95)
+    >>> _pv("HN01", evidence="Sample_title").source
+    'geo-soft'
+    """
+    def _pv(
+        value: Any,
+        evidence: str | None = None,
+        confidence: float | None = None,
+    ) -> ProvenancedValue[Any]:
+        return ProvenancedValue(
+            value=value,
+            source=source_name,
+            confidence=default_confidence if confidence is None else confidence,
+            evidence=evidence,
+        )
+    return _pv
 
 
 @runtime_checkable

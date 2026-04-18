@@ -31,7 +31,9 @@ from ..schema import (
     ProvenancedValue,
     Source,
 )
-from .base import register
+from .base import make_pv, register
+
+_pv = make_pv("geo-soft", default_confidence=0.95)
 
 
 _GSE_ACCESSION = re.compile(r"^(GSE|GDS)\d+$")
@@ -168,12 +170,6 @@ def _is_url(s: str) -> bool:
     that isn't http/https/ftp is noise as far as the downloader is concerned.
     """
     return isinstance(s, str) and s.startswith(("http://", "https://", "ftp://"))
-
-
-def _pv(value: str, evidence: str, confidence: float = 0.95) -> ProvenancedValue[str]:
-    return ProvenancedValue(
-        value=value, source="geo-soft", confidence=confidence, evidence=evidence,
-    )
 
 
 def _extract_characteristics(attrs: dict[str, list[str]]) -> dict[str, ProvenancedValue[str]]:

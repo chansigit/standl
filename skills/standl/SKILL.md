@@ -184,9 +184,30 @@ The core never says "if GSE, use GEO parser". Each extractor implements
 extractor above threshold and reconciles per-field, so GEO format drift
 degrades one extractor's confidence instead of breaking the pipeline.
 
-Known registered extractors:
-- `geo-soft` — deterministic facts from SOFT/MINiML/series-matrix.
-- `h5ad-observed` — reads an existing processed h5ad's `obs` / `uns`.
+Registered extractors (as of v0.2.0):
+
+| name | dispatch signal | scope |
+|---|---|---|
+| `geo-soft` | GSE/GSM/GPL/GDS accession, or `ncbi.nlm.nih.gov/geo` URL | GEO SOFT family file; deterministic sample metadata + per-sample supplementary URLs |
+| `cellxgene-api` | `cellxgene.cziscience.com/e/<uuid>.cxg/` explorer URL, or UUID + `repositories=["CELLxGENE"]` | CZI CELLxGENE Discover curation API — one standardized h5ad per dataset |
+| `hca-dcp` | `data.humancellatlas.org/explore/projects/<uuid>` URL, or UUID + `repositories=["HCA"]` | HCA Azul API; contributor-generated matrix (CGM) files, async `/fetch/repository/files/` URLs |
+| `biostudies` | `E-MTAB-*` / `E-GEOD-*` / `S-BIAD*` / etc. accession, or `ebi.ac.uk/biostudies` URL | EBI BioStudies + legacy ArrayExpress; filters SRA-level raw formats |
+| `zenodo` | `10.5281/zenodo.<id>` DOI, `zenodo.org/records/<id>` URL, or numeric id + `repositories=["Zenodo"]` | Generic DOI-backed data repo; metadata is free-form |
+| `figshare` | `10.6084/m9.figshare.<id>[.v<N>]` DOI, `figshare.com/articles/.../<id>` URL, or numeric id + `repositories=["Figshare"]` | Same shape as Zenodo |
+| `h5ad-observed` | `Source.local_h5ad` set | Treats a processed h5ad's `obs`/`uns` as the ground-truth design for ``meta-check`` |
+
+All deterministic-source extractors (everything except `h5ad-observed`)
+share the same one-sample-per-dataset pattern: the PartialSample's
+``sample_id`` is the dataset id (GSM for GEO, UUID for CxG/HCA, record id
+for Zenodo/Figshare, accession for BioStudies). Per-donor splits are a
+skill rescue step when needed (see the pooled-series section above).
+
+Don't re-litigate which extractor wins on conflicts — the merger's
+priority map already settles that: ``manual`` (hand-edited design.yaml)
+> `geo-soft` > `h5ad-observed` > `cellxgene-api` / `hca-dcp` >
+`biostudies`; confidence wins first, priority breaks ties. Deterministic
+repos beat free-form ones (Zenodo / Figshare) because the latter have no
+structured biological vocab.
 
 Add a new source: drop a module under `src/standl/extractors/` with a
 class satisfying the `DesignExtractor` protocol, call `register(...)`.

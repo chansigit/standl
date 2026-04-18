@@ -30,8 +30,9 @@ from pathlib import Path
 from typing import Any
 
 from ..schema import PartialDesign, PartialSample, ProvenancedValue, Source
-from .base import register
+from .base import make_pv, register
 
+_pv = make_pv("biostudies", default_confidence=0.9)
 
 API_BASE = "https://www.ebi.ac.uk/biostudies/api/v1"
 FILES_BASE = "https://www.ebi.ac.uk/biostudies/files"
@@ -49,10 +50,6 @@ _RAW_EXTENSIONS = {
     ".fastq", ".fastq.gz", ".fq", ".fq.gz",
     ".bam", ".bai", ".cram", ".crai", ".sra",
 }
-
-
-def _pv(value: str, evidence: str, confidence: float = 0.9) -> ProvenancedValue[str]:
-    return ProvenancedValue(value=value, source="biostudies", confidence=confidence, evidence=evidence)
 
 
 def _extract_accession(source: Source) -> str | None:
