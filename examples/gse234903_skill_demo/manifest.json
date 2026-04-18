@@ -1,0 +1,51 @@
+{
+  "dataset_id": "GSE234903",
+  "entries": [
+    {
+      "path": "GSM7476348/GSM7476348_2706-1-1-1-1_raw_feature.h5",
+      "url": "ftp://ftp.ncbi.nlm.nih.gov/geo/samples/GSM7476nnn/GSM7476348/suppl/GSM7476348_2706-1-1-1-1_raw_feature.h5",
+      "size_bytes": 12780214,
+      "sha256": "39b4337085a109a04aabe7703e5b71273add38dd16310b9e4bc2c150d51634a2",
+      "status": "ok",
+      "downloaded_at": "2026-04-18T09:12:25.036387Z",
+      "source_accession": "GSM7476348"
+    },
+    {
+      "path": "GSM7476349/GSM7476349_2708-1-1-1_raw_feature.h5",
+      "url": "ftp://ftp.ncbi.nlm.nih.gov/geo/samples/GSM7476nnn/GSM7476349/suppl/GSM7476349_2708-1-1-1_raw_feature.h5",
+      "size_bytes": 20119575,
+      "sha256": "77e394044a14b2e9ca4412efdecb80da16e8690d3f4ed738c81e7c7081bbf915",
+      "status": "ok",
+      "downloaded_at": "2026-04-18T09:12:26.715257Z",
+      "source_accession": "GSM7476349"
+    },
+    {
+      "path": "GSM7476350/GSM7476350_2753-1-1-1-1_raw_feature.h5",
+      "url": "ftp://ftp.ncbi.nlm.nih.gov/geo/samples/GSM7476nnn/GSM7476350/suppl/GSM7476350_2753-1-1-1-1_raw_feature.h5",
+      "size_bytes": 5018109,
+      "sha256": "9ad20410523b5d944dfb765e74fa6922e59c4314aed3b5f6a9c66e994f66c670",
+      "status": "ok",
+      "downloaded_at": "2026-04-18T09:12:28.267917Z",
+      "source_accession": "GSM7476350"
+    },
+    {
+      "path": "GSM7476351/GSM7476351_2765-1-1-1_raw_feature.h5",
+      "url": "ftp://ftp.ncbi.nlm.nih.gov/geo/samples/GSM7476nnn/GSM7476351/suppl/GSM7476351_2765-1-1-1_raw_feature.h5",
+      "size_bytes": 10350824,
+      "sha256": "cb7d15544a7b6fe78d3b529a10bc1647014f5a4155541479aeef7d89492440bd",
+      "status": "ok",
+      "downloaded_at": "2026-04-18T09:12:30.004463Z",
+      "source_accession": "GSM7476351"
+    },
+    {
+      "path": "GSM7476352/GSM7476352_3116-1-2-2_raw_feature.h5",
+      "url": "ftp://ftp.ncbi.nlm.nih.gov/geo/samples/GSM7476nnn/GSM7476352/suppl/GSM7476352_3116-1-2-2_raw_feature.h5",
+      "size_bytes": 16946149,
+      "sha256": "f8f3eddcfa1f3df61bd1cdef0735acc70102dc9bab634a79dfd15be91b1a490a",
+      "status": "ok",
+      "downloaded_at": "2026-04-18T09:12:31.693984Z",
+      "source_accession": "GSM7476352"
+    }
+  ],
+  "created_at": "2026-04-18T09:12:23.552689Z"
+}

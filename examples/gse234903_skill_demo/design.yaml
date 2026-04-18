@@ -1,0 +1,115 @@
+dataset_id: GSE234903
+source:
+  paper_doi: 10.3389/fimmu.2025.1620745
+  paper_url: https://pmc.ncbi.nlm.nih.gov/articles/PMC12631193/
+  accessions: [GSE234903]
+  repositories: [GEO]
+
+organism: Homo sapiens
+# Paper: "Chromium Next GEM single-cell V(D)J reagent kit v2 with feature barcoding"
+# Sequencer: DNBSEQ-G400 (MGI); SOFT's `DNBSEQ-G400` is the instrument, not the assay.
+assay: 10x Chromium Next GEM v2
+
+samples:
+  - sample_id: GSM7476348
+    accession: GSM7476348
+    files:
+      - GSM7476348/GSM7476348_2706-1-1-1-1_raw_feature.h5
+    organism: Homo sapiens
+    tissue: peripheral blood
+    tissue_ontology: UBERON:0000178
+    cell_type: neutrophil
+    disease: COVID-19
+    donor_id: Pt1
+    condition: VW
+    batch: 2021_spring
+    extra:
+      title: No.2706-1-1-1-1
+      weaning_days: "<=28"
+  - sample_id: GSM7476349
+    accession: GSM7476349
+    files:
+      - GSM7476349/GSM7476349_2708-1-1-1_raw_feature.h5
+    organism: Homo sapiens
+    tissue: peripheral blood
+    tissue_ontology: UBERON:0000178
+    cell_type: neutrophil
+    disease: COVID-19
+    donor_id: Pt2
+    condition: VW
+    batch: 2021_spring
+    extra:
+      title: No.2708-1-1-1
+      weaning_days: "<=28"
+  - sample_id: GSM7476350
+    accession: GSM7476350
+    files:
+      - GSM7476350/GSM7476350_2753-1-1-1-1_raw_feature.h5
+    organism: Homo sapiens
+    tissue: peripheral blood
+    tissue_ontology: UBERON:0000178
+    cell_type: neutrophil
+    disease: COVID-19
+    donor_id: Pt3
+    condition: NVW
+    batch: 2021_summer
+    extra:
+      title: No.2753-1-1-1-1
+      weaning_days: ">28"
+  - sample_id: GSM7476351
+    accession: GSM7476351
+    files:
+      - GSM7476351/GSM7476351_2765-1-1-1_raw_feature.h5
+    organism: Homo sapiens
+    tissue: peripheral blood
+    tissue_ontology: UBERON:0000178
+    cell_type: neutrophil
+    disease: COVID-19
+    donor_id: Pt4
+    condition: NVW
+    batch: 2021_summer
+    extra:
+      title: No.2765-1-1-1
+      weaning_days: ">28"
+  - sample_id: GSM7476352
+    accession: GSM7476352
+    files:
+      - GSM7476352/GSM7476352_3116-1-2-2_raw_feature.h5
+    organism: Homo sapiens
+    tissue: peripheral blood
+    tissue_ontology: UBERON:0000178
+    cell_type: neutrophil
+    disease: COVID-19
+    donor_id: Pt5
+    condition: NVW
+    batch: 2021_autumn
+    extra:
+      title: No.3116-1-2-2
+      weaning_days: ">28"
+
+factors:
+  - name: condition
+    levels: [VW, NVW]
+    reference: VW
+  - name: batch
+    levels: [2021_spring, 2021_summer, 2021_autumn]
+
+contrasts:
+  - name: NVW_vs_VW
+    numerator: {condition: NVW}
+    denominator: {condition: VW}
+    source: "Ito et al. 2025 Fig 2 — pseudo-bulk VW vs NVW"
+
+batches: [batch]
+
+extraction:
+  methods: [geo-soft, manual]
+  extracted_at: 2026-04-18T09:15:00Z
+  notes: >
+    geo-soft auto-fill; hand-edited per skills/standl/SKILL.md after WebFetching
+    PMC12631193. Patient 1..5 → GSM7476348..52 per paper's Results ("patient cases
+    1 and 2 [VW], patient cases 3, 4, 5 [NVW]"). Total cells post-QC: ~35,759 (paper
+    reports). Batch inferred from sample collection May-Oct 2021 (institution single,
+    so batch ≈ collection timepoint). Paper's 6 healthy controls are bulk-RNA-seq
+    only (not in this GSE). Note: paper cites GSE234904 in Data Availability but
+    the matching scRNA samples live here at GSE234903 — mismatch noted.
