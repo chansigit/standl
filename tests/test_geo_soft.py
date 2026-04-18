@@ -16,6 +16,7 @@ Per the wide-in / narrow-out policy, the extractor must:
 from __future__ import annotations
 
 import gzip
+import re
 import shutil
 from pathlib import Path
 
@@ -186,3 +187,79 @@ def test_extract_tolerant_of_unknown_attr_lines(tmp_path):
     partial = _ex().extract(Source(accessions=["GSE999001"]), cache_dir=tmp_path)
     assert partial.dataset_id == "GSE999001"
     assert len(partial.samples) == 2
+
+
+# -------- regressions against real-world GEO quirks --------
+
+def test_none_literal_is_stripped_from_supplementary_files(tmp_path):
+    """GEO writes ``!Sample_supplementary_file_1 = NONE`` when a sample has
+    no sample-level processed file (data is pooled at series level).
+    Observed in GSE149689. ``NONE`` must not become a URL."""
+    soft = tmp_path / "GSE999001_family.soft"
+    text = FIXTURE_SOFT.read_text()
+    # Rewrite all real URLs for GSM999001 to the sentinel.
+    text = re.sub(
+        r"(!Sample_supplementary_file_\d+ = )(ftp://[^\n]+HN01_Tumor[^\n]+)",
+        r"\1NONE",
+        text,
+    )
+    soft.write_text(text)
+
+    partial = _ex().extract(Source(accessions=["GSE999001"]), cache_dir=tmp_path)
+    by_id = {s.sample_id: s for s in partial.samples}
+    # GSM999001 had all three URLs replaced with NONE → no files, no url_map entry.
+    assert by_id["GSM999001"].files is None
+    assert "GSM999001" not in partial.url_map
+    # GSM999002 untouched → still has its three URLs.
+    assert by_id["GSM999002"].files is not None
+    assert len(by_id["GSM999002"].files.value) == 3
+
+
+def test_series_supplementary_recorded_when_samples_have_none(tmp_path):
+    """If every sample has supplementary=NONE but the series has pooled
+    supplementary files, record them in notes + surface as a
+    ``data_layout`` failure so the user knows to split by barcode suffix."""
+    soft = tmp_path / "GSE999001_family.soft"
+    text = FIXTURE_SOFT.read_text()
+    # Strip every sample-level supplementary URL to NONE.
+    text = re.sub(
+        r"(!Sample_supplementary_file_\d+ = )ftp://[^\n]+",
+        r"\1NONE",
+        text,
+    )
+    # Splice series-level files right after the SERIES block's sample_ids.
+    text = text.replace(
+        "!Series_sample_id = GSM999002\n",
+        (
+            "!Series_sample_id = GSM999002\n"
+            "!Series_supplementary_file = ftp://ftp.ncbi.nlm.nih.gov/geo/series/GSE999nnn/GSE999001/suppl/GSE999001_matrix.mtx.gz\n"
+            "!Series_supplementary_file = ftp://ftp.ncbi.nlm.nih.gov/geo/series/GSE999nnn/GSE999001/suppl/GSE999001_barcodes.tsv.gz\n"
+        ),
+    )
+    soft.write_text(text)
+
+    partial = _ex().extract(Source(accessions=["GSE999001"]), cache_dir=tmp_path)
+    assert all(s.files is None for s in partial.samples)
+    assert partial.url_map == {}
+    assert "data_layout" in partial.failures
+    assert "Series_supplementary_file" in partial.failures["data_layout"]
+    assert "series_supplementary_files" in (partial.notes or "")
+
+
+def test_sample_files_filtered_but_other_samples_keep_urls(tmp_path):
+    """Mixed case: some samples NONE, some with real URLs — the non-NONE
+    samples are unaffected."""
+    soft = tmp_path / "GSE999001_family.soft"
+    text = FIXTURE_SOFT.read_text()
+    # Only GSM999001's supp lines become NONE.
+    text = re.sub(
+        r"(!Sample_supplementary_file_\d+ = )ftp://[^\n]+GSM999001[^\n]+",
+        r"\1NONE",
+        text,
+    )
+    soft.write_text(text)
+
+    partial = _ex().extract(Source(accessions=["GSE999001"]), cache_dir=tmp_path)
+    # GSM999001 empty, GSM999002 still intact — so samples overall DO have files,
+    # which means the series-level ``data_layout`` branch should NOT fire.
+    assert "data_layout" not in partial.failures

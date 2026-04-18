@@ -144,6 +144,43 @@ def test_run_raises_when_no_extractor_matches(tmp_path: Path):
 
 # -------- extractor failure is recorded, not fatal --------
 
+def test_run_elevates_data_layout_failure_to_fail(http_server, tmp_path: Path):
+    """When a SOFT has all samples with Sample_supplementary_file = NONE and
+    real data at Series_supplementary_file, geo-soft emits a ``data_layout``
+    failure. modes.run must surface it as a FAIL audit record so downstream
+    CI / callers don't mistake the empty raw/ dir for a successful run."""
+    from standl.modes import run
+    from standl.schema import Source
+
+    # Start from the fixture and strip every sample-level URL to NONE,
+    # then add a series-level pool so the parser triggers data_layout.
+    soft_text = _rewrite_soft(http_server.url)
+    soft_text = re.sub(
+        r"(!Sample_supplementary_file_\d+ = )http://[^\n]+",
+        r"\1NONE",
+        soft_text,
+    )
+    soft_text = soft_text.replace(
+        "!Series_sample_id = GSM999002\n",
+        (
+            "!Series_sample_id = GSM999002\n"
+            "!Series_supplementary_file = ftp://example/pool_matrix.mtx.gz\n"
+        ),
+    )
+    out_dir = tmp_path / "ds"
+    _seed_paper_cache(out_dir, soft_text)
+
+    report = run(Source(accessions=["GSE999001"]), out_dir)
+
+    assert report.worst_severity() == "fail"
+    data_layout_records = [
+        r for r in report.records
+        if r.check == "extractor_partial_failure" and "data_layout" in r.message
+    ]
+    assert data_layout_records
+    assert data_layout_records[0].status == "fail"
+
+
 def test_run_records_extractor_failure_via_partial(monkeypatch, tmp_path: Path, http_server):
     """If an extractor raises mid-run, we collect it as a PartialDesign with
     failures (not crash). Downstream validate still runs; the dataset dir is

@@ -160,6 +160,16 @@ def _first(values: list[str] | None) -> str | None:
     return values[0]
 
 
+def _is_url(s: str) -> bool:
+    """GEO writes literal 'NONE' (and occasionally empty strings) in
+    ``Sample_supplementary_file_N`` when the sample has no processed file at
+    the sample level — the actual data sits at ``Series_supplementary_file``
+    (a pooled matrix covering all samples, split by barcode suffix). Anything
+    that isn't http/https/ftp is noise as far as the downloader is concerned.
+    """
+    return isinstance(s, str) and s.startswith(("http://", "https://", "ftp://"))
+
+
 def _pv(value: str, evidence: str, confidence: float = 0.95) -> ProvenancedValue[str]:
     return ProvenancedValue(
         value=value, source="geo-soft", confidence=confidence, evidence=evidence,
@@ -238,6 +248,9 @@ def _build_partial(parsed: _Parsed, dataset_id: str) -> PartialDesign:
             if k.startswith("Sample_supplementary_file") and k not in numbered_keys:
                 urls.extend(attrs[k])
 
+        # Strip GEO's "NONE" placeholder and any other non-URL noise.
+        urls = [u for u in urls if _is_url(u)]
+
         if urls:
             # sample.files is the local relative path under raw/; url_map
             # carries the remote URLs. modes.run downloads url_map[sid][i]
@@ -271,6 +284,26 @@ def _build_partial(parsed: _Parsed, dataset_id: str) -> PartialDesign:
     if not samples:
         failures["samples"] = "no ^SAMPLE blocks parsed from SOFT file"
 
+    # Surface series-level supplementary files (common when samples all have
+    # Sample_supplementary_file = NONE and the processed matrix is pooled at
+    # the series level). Downstream consumers need to split by barcode suffix
+    # themselves; standl doesn't auto-split.
+    series_supp = [u for u in series.get("Series_supplementary_file", []) if _is_url(u)]
+    any_sample_has_files = any(s.files is not None for s in samples)
+    if series_supp and not any_sample_has_files:
+        failures["data_layout"] = (
+            "no sample-level supplementary files; data is pooled at "
+            f"Series_supplementary_file ({len(series_supp)} file(s)). "
+            "Downstream must split by barcode suffix. URLs: "
+            + ", ".join(series_supp)
+        )
+
+    notes_parts: list[str] = []
+    if title := _first(series.get("Series_title")):
+        notes_parts.append(title)
+    if series_supp:
+        notes_parts.append("series_supplementary_files: " + "; ".join(series_supp))
+
     return PartialDesign(
         extractor="geo-soft",
         dataset_id=dataset_id,
@@ -280,7 +313,7 @@ def _build_partial(parsed: _Parsed, dataset_id: str) -> PartialDesign:
         samples=samples,
         url_map=url_map,
         failures=failures,
-        notes=_first(series.get("Series_title")),
+        notes=" | ".join(notes_parts) or None,
     )
 
 

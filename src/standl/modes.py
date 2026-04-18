@@ -523,7 +523,26 @@ def run(source: Source, out_dir: Path) -> AuditReport:
     _write_provenance_json(out_dir, provenance)
     _write_manifest_json(out_dir, manifest)
 
-    return validate(out_dir)
+    report = validate(out_dir)
+
+    # Surface extractor partial failures so conditions like "data is pooled at
+    # series level, samples all have supp=NONE" (geo-soft's ``data_layout``)
+    # don't silently result in an empty raw/ dir with an "all ok" audit.md.
+    # ``data_layout`` means the pipeline can't produce what the user asked for
+    # — elevate to FAIL so `audit.md` worst_severity reflects reality.
+    for p in partials:
+        for field_name, reason in sorted(p.failures.items()):
+            sev = Severity.FAIL if field_name == "data_layout" else Severity.WARN
+            report.add(AuditRecord(
+                check="extractor_partial_failure",
+                status=sev,
+                message=f"{p.extractor!r} could not extract {field_name!r}: {reason}",
+                evidence={"extractor": p.extractor, "field": field_name, "reason": reason},
+            ))
+
+    # audit.md was written by validate(); rewrite with the augmented report.
+    (out_dir / "audit.md").write_text(render_markdown(report))
+    return report
 
 
 def _design_to_partial(
