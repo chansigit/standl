@@ -33,10 +33,29 @@ standl → stanobj → stangene → stancounts → (QC/integrate/annotate) → s
 See `docs/design-schema.md` for the `design.yaml` schema and
 `examples/design.example.yaml` for a filled example.
 
+## Quickstart
+
+Given a GEO accession, `standl run` fetches the SOFT family file, extracts
+a per-sample skeleton, downloads each sample's supplementary files, and
+writes an audit:
+
+```bash
+standl run GSE96583 -o /tmp/gse96583
+```
+
+~76 MB, 10 files, ~6 s on a warm pipe. Produces `design.yaml` +
+`manifest.json` + `provenance.json` + `raw/` + `audit.md` with every check
+green.
+
+`geo-soft` does not guess `condition` / `donor_id` / `contrasts` from
+characteristics free-text — that's a human step. Hand-edit `design.yaml`
+(see `skills/standl/SKILL.md`), then re-run `standl validate` to surface
+issues like perfect confounds. Worked demo: `examples/gse96583/`.
+
 ## Status
 
-Skeleton. Schema-first: the `design.yaml` contract is the stable API; paper
-extraction and downloader backends are pluggable behind it.
+MVP complete (roadmap steps 1–3 + 5; step 4 intentionally dropped in favor
+of a Claude-Code skill — see `skills/standl/SKILL.md`). 79 tests passing.
 
-See `docs/roadmap.md` for the implementation plan and `skills/standl/SKILL.md`
-for the skill contract.
+See `docs/roadmap.md` for the implementation plan and `docs/design-schema.md`
+for the authoritative `design.yaml` contract.

@@ -1,0 +1,96 @@
+{
+  "dataset_id": "GSE96583",
+  "entries": [
+    {
+      "path": "GSM2560245/GSM2560245_A.mat.gz",
+      "url": "ftp://ftp.ncbi.nlm.nih.gov/geo/samples/GSM2560nnn/GSM2560245/suppl/GSM2560245_A.mat.gz",
+      "size_bytes": 5127304,
+      "sha256": "f136bcb973ac032f67f01af7aacf1231c59d214d7a807f296f8a4a755ebcf1d4",
+      "status": "ok",
+      "downloaded_at": "2026-04-18T03:17:31.644383Z",
+      "source_accession": "GSM2560245"
+    },
+    {
+      "path": "GSM2560245/GSM2560245_barcodes.tsv.gz",
+      "url": "ftp://ftp.ncbi.nlm.nih.gov/geo/samples/GSM2560nnn/GSM2560245/suppl/GSM2560245_barcodes.tsv.gz",
+      "size_bytes": 14627,
+      "sha256": "04d678f3cb451b552aaa20305b80a688177022e72ec330fedeac56f40a431d86",
+      "status": "ok",
+      "downloaded_at": "2026-04-18T03:17:31.887241Z",
+      "source_accession": "GSM2560245"
+    },
+    {
+      "path": "GSM2560246/GSM2560246_B.mat.gz",
+      "url": "ftp://ftp.ncbi.nlm.nih.gov/geo/samples/GSM2560nnn/GSM2560246/suppl/GSM2560246_B.mat.gz",
+      "size_bytes": 5474492,
+      "sha256": "0f1f49e772206fa0e1de90d10c12bd990501efe2db044dd38938bf52ae3cf389",
+      "status": "ok",
+      "downloaded_at": "2026-04-18T03:17:32.592570Z",
+      "source_accession": "GSM2560246"
+    },
+    {
+      "path": "GSM2560246/GSM2560246_barcodes.tsv.gz",
+      "url": "ftp://ftp.ncbi.nlm.nih.gov/geo/samples/GSM2560nnn/GSM2560246/suppl/GSM2560246_barcodes.tsv.gz",
+      "size_bytes": 16895,
+      "sha256": "13f672bff6f2199033b011d7322db2e15cd91a3b65c5e394f3273dda2eb221b6",
+      "status": "ok",
+      "downloaded_at": "2026-04-18T03:17:32.852851Z",
+      "source_accession": "GSM2560246"
+    },
+    {
+      "path": "GSM2560247/GSM2560247_C.mat.gz",
+      "url": "ftp://ftp.ncbi.nlm.nih.gov/geo/samples/GSM2560nnn/GSM2560247/suppl/GSM2560247_C.mat.gz",
+      "size_bytes": 7827230,
+      "sha256": "0b33f6ad628fe57be58e26d589124ab2319eddee3912b14eb737f317ac8906e9",
+      "status": "ok",
+      "downloaded_at": "2026-04-18T03:17:33.560833Z",
+      "source_accession": "GSM2560247"
+    },
+    {
+      "path": "GSM2560247/GSM2560247_barcodes.tsv.gz",
+      "url": "ftp://ftp.ncbi.nlm.nih.gov/geo/samples/GSM2560nnn/GSM2560247/suppl/GSM2560247_barcodes.tsv.gz",
+      "size_bytes": 23665,
+      "sha256": "625fc4cd9b4e53e7918cff4e6057ce36a9ad6ca820405a23fe10a4a761c15c04",
+      "status": "ok",
+      "downloaded_at": "2026-04-18T03:17:33.851752Z",
+      "source_accession": "GSM2560247"
+    },
+    {
+      "path": "GSM2560248/GSM2560248_2.1.mtx.gz",
+      "url": "ftp://ftp.ncbi.nlm.nih.gov/geo/samples/GSM2560nnn/GSM2560248/suppl/GSM2560248_2.1.mtx.gz",
+      "size_bytes": 28545918,
+      "sha256": "32add28a0b3397d9ef3f220b7a6a55e98e60fe7b66fe48d0986d634df8ca0013",
+      "status": "ok",
+      "downloaded_at": "2026-04-18T03:17:34.764944Z",
+      "source_accession": "GSM2560248"
+    },
+    {
+      "path": "GSM2560248/GSM2560248_barcodes.tsv.gz",
+      "url": "ftp://ftp.ncbi.nlm.nih.gov/geo/samples/GSM2560nnn/GSM2560248/suppl/GSM2560248_barcodes.tsv.gz",
+      "size_bytes": 52904,
+      "sha256": "d58d8d55cbe4a12757207784b3bc9227bf200c9100ca15131176e9f8159c955e",
+      "status": "ok",
+      "downloaded_at": "2026-04-18T03:17:35.130726Z",
+      "source_accession": "GSM2560248"
+    },
+    {
+      "path": "GSM2560249/GSM2560249_2.2.mtx.gz",
+      "url": "ftp://ftp.ncbi.nlm.nih.gov/geo/samples/GSM2560nnn/GSM2560249/suppl/GSM2560249_2.2.mtx.gz",
+      "size_bytes": 29050932,
+      "sha256": "8aecc98a7ac4957bbc2570f87ebe8ce97332a5bcdbf557d40bd5aabfd287bdc5",
+      "status": "ok",
+      "downloaded_at": "2026-04-18T03:17:36.132134Z",
+      "source_accession": "GSM2560249"
+    },
+    {
+      "path": "GSM2560249/GSM2560249_barcodes.tsv.gz",
+      "url": "ftp://ftp.ncbi.nlm.nih.gov/geo/samples/GSM2560nnn/GSM2560249/suppl/GSM2560249_barcodes.tsv.gz",
+      "size_bytes": 52366,
+      "sha256": "9bb38e080dfae81036fbcd9902c6c6254a4466aa85f70705479be3b2d6679d55",
+      "status": "ok",
+      "downloaded_at": "2026-04-18T03:17:36.508406Z",
+      "source_accession": "GSM2560249"
+    }
+  ],
+  "created_at": "2026-04-18T03:17:30.992496Z"
+}

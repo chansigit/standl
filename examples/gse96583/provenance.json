@@ -1,0 +1,214 @@
+{
+  "dataset_id": "GSE96583",
+  "fields": [
+    {
+      "path": "organism",
+      "chosen": {
+        "value": "Homo sapiens",
+        "source": "geo-soft",
+        "confidence": 0.95,
+        "evidence": "Series_organism"
+      },
+      "rejected": [],
+      "conflict": false
+    },
+    {
+      "path": "assay",
+      "chosen": {
+        "value": "Illumina HiSeq 2500 (Homo sapiens)",
+        "source": "geo-soft",
+        "confidence": 0.6,
+        "evidence": "Platform_title"
+      },
+      "rejected": [],
+      "conflict": false
+    },
+    {
+      "path": "samples[GSM2560245].files",
+      "chosen": {
+        "value": [
+          "GSM2560245/GSM2560245_A.mat.gz",
+          "GSM2560245/GSM2560245_barcodes.tsv.gz"
+        ],
+        "source": "geo-soft",
+        "confidence": 0.95,
+        "evidence": "Sample_supplementary_file_*"
+      },
+      "rejected": [],
+      "conflict": false
+    },
+    {
+      "path": "samples[GSM2560245].accession",
+      "chosen": {
+        "value": "GSM2560245",
+        "source": "geo-soft",
+        "confidence": 0.95,
+        "evidence": "Sample_geo_accession"
+      },
+      "rejected": [],
+      "conflict": false
+    },
+    {
+      "path": "samples[GSM2560245].organism",
+      "chosen": {
+        "value": "Homo sapiens",
+        "source": "geo-soft",
+        "confidence": 0.95,
+        "evidence": "Sample_organism_ch1"
+      },
+      "rejected": [],
+      "conflict": false
+    },
+    {
+      "path": "samples[GSM2560246].files",
+      "chosen": {
+        "value": [
+          "GSM2560246/GSM2560246_B.mat.gz",
+          "GSM2560246/GSM2560246_barcodes.tsv.gz"
+        ],
+        "source": "geo-soft",
+        "confidence": 0.95,
+        "evidence": "Sample_supplementary_file_*"
+      },
+      "rejected": [],
+      "conflict": false
+    },
+    {
+      "path": "samples[GSM2560246].accession",
+      "chosen": {
+        "value": "GSM2560246",
+        "source": "geo-soft",
+        "confidence": 0.95,
+        "evidence": "Sample_geo_accession"
+      },
+      "rejected": [],
+      "conflict": false
+    },
+    {
+      "path": "samples[GSM2560246].organism",
+      "chosen": {
+        "value": "Homo sapiens",
+        "source": "geo-soft",
+        "confidence": 0.95,
+        "evidence": "Sample_organism_ch1"
+      },
+      "rejected": [],
+      "conflict": false
+    },
+    {
+      "path": "samples[GSM2560247].files",
+      "chosen": {
+        "value": [
+          "GSM2560247/GSM2560247_C.mat.gz",
+          "GSM2560247/GSM2560247_barcodes.tsv.gz"
+        ],
+        "source": "geo-soft",
+        "confidence": 0.95,
+        "evidence": "Sample_supplementary_file_*"
+      },
+      "rejected": [],
+      "conflict": false
+    },
+    {
+      "path": "samples[GSM2560247].accession",
+      "chosen": {
+        "value": "GSM2560247",
+        "source": "geo-soft",
+        "confidence": 0.95,
+        "evidence": "Sample_geo_accession"
+      },
+      "rejected": [],
+      "conflict": false
+    },
+    {
+      "path": "samples[GSM2560247].organism",
+      "chosen": {
+        "value": "Homo sapiens",
+        "source": "geo-soft",
+        "confidence": 0.95,
+        "evidence": "Sample_organism_ch1"
+      },
+      "rejected": [],
+      "conflict": false
+    },
+    {
+      "path": "samples[GSM2560248].files",
+      "chosen": {
+        "value": [
+          "GSM2560248/GSM2560248_2.1.mtx.gz",
+          "GSM2560248/GSM2560248_barcodes.tsv.gz"
+        ],
+        "source": "geo-soft",
+        "confidence": 0.95,
+        "evidence": "Sample_supplementary_file_*"
+      },
+      "rejected": [],
+      "conflict": false
+    },
+    {
+      "path": "samples[GSM2560248].accession",
+      "chosen": {
+        "value": "GSM2560248",
+        "source": "geo-soft",
+        "confidence": 0.95,
+        "evidence": "Sample_geo_accession"
+      },
+      "rejected": [],
+      "conflict": false
+    },
+    {
+      "path": "samples[GSM2560248].organism",
+      "chosen": {
+        "value": "Homo sapiens",
+        "source": "geo-soft",
+        "confidence": 0.95,
+        "evidence": "Sample_organism_ch1"
+      },
+      "rejected": [],
+      "conflict": false
+    },
+    {
+      "path": "samples[GSM2560249].files",
+      "chosen": {
+        "value": [
+          "GSM2560249/GSM2560249_2.2.mtx.gz",
+          "GSM2560249/GSM2560249_barcodes.tsv.gz"
+        ],
+        "source": "geo-soft",
+        "confidence": 0.95,
+        "evidence": "Sample_supplementary_file_*"
+      },
+      "rejected": [],
+      "conflict": false
+    },
+    {
+      "path": "samples[GSM2560249].accession",
+      "chosen": {
+        "value": "GSM2560249",
+        "source": "geo-soft",
+        "confidence": 0.95,
+        "evidence": "Sample_geo_accession"
+      },
+      "rejected": [],
+      "conflict": false
+    },
+    {
+      "path": "samples[GSM2560249].organism",
+      "chosen": {
+        "value": "Homo sapiens",
+        "source": "geo-soft",
+        "confidence": 0.95,
+        "evidence": "Sample_organism_ch1"
+      },
+      "rejected": [],
+      "conflict": false
+    }
+  ],
+  "extractor_runs": [
+    {
+      "extractor": "geo-soft",
+      "failures": {}
+    }
+  ],
+  "created_at": "2026-04-18T03:17:30.992441Z"
+}

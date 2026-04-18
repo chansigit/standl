@@ -1,0 +1,101 @@
+dataset_id: GSE96583
+source:
+  paper_doi: 10.1038/nbt.4042
+  paper_url: https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5784859/
+  accessions: [GSE96583]
+  repositories: [GEO]
+
+organism: Homo sapiens
+assay: 10x Chromium v1
+
+samples:
+  - sample_id: GSM2560245
+    accession: GSM2560245
+    files:
+      - GSM2560245/GSM2560245_A.mat.gz
+      - GSM2560245/GSM2560245_barcodes.tsv.gz
+    organism: Homo sapiens
+    cell_type: peripheral blood mononuclear cells
+    disease: systemic lupus erythematosus
+    donor_id: batch1_well1
+    condition: baseline
+    batch: batch1
+    extra:
+      title: batch 1 sample A
+      stimulation: none
+  - sample_id: GSM2560246
+    accession: GSM2560246
+    files:
+      - GSM2560246/GSM2560246_B.mat.gz
+      - GSM2560246/GSM2560246_barcodes.tsv.gz
+    organism: Homo sapiens
+    cell_type: peripheral blood mononuclear cells
+    disease: systemic lupus erythematosus
+    donor_id: batch1_well2
+    condition: baseline
+    batch: batch1
+    extra:
+      title: batch 1 sample B
+      stimulation: none
+  - sample_id: GSM2560247
+    accession: GSM2560247
+    files:
+      - GSM2560247/GSM2560247_C.mat.gz
+      - GSM2560247/GSM2560247_barcodes.tsv.gz
+    organism: Homo sapiens
+    cell_type: peripheral blood mononuclear cells
+    disease: systemic lupus erythematosus
+    donor_id: batch1_well3
+    condition: baseline
+    batch: batch1
+    extra:
+      title: batch 1 sample C
+      stimulation: none
+  - sample_id: GSM2560248
+    accession: GSM2560248
+    files:
+      - GSM2560248/GSM2560248_2.1.mtx.gz
+      - GSM2560248/GSM2560248_barcodes.tsv.gz
+    organism: Homo sapiens
+    cell_type: peripheral blood mononuclear cells
+    disease: systemic lupus erythematosus
+    donor_id: batch2_ctrl
+    condition: control
+    batch: batch2
+    extra:
+      title: batch 2 control
+      stimulation: none
+  - sample_id: GSM2560249
+    accession: GSM2560249
+    files:
+      - GSM2560249/GSM2560249_2.2.mtx.gz
+      - GSM2560249/GSM2560249_barcodes.tsv.gz
+    organism: Homo sapiens
+    cell_type: peripheral blood mononuclear cells
+    disease: systemic lupus erythematosus
+    donor_id: batch2_stim
+    condition: IFN_beta
+    batch: batch2
+    extra:
+      title: batch 2 stim (IFN-beta)
+      stimulation: IFN-beta_6h
+
+factors:
+  - name: condition
+    levels: [baseline, control, IFN_beta]
+    reference: control
+  - name: batch
+    levels: [batch1, batch2]
+
+contrasts:
+  - name: ifn_beta_vs_control
+    numerator: {condition: IFN_beta}
+    denominator: {condition: control}
+    source: "Kang et al. 2018, Fig 1 — batch 2 IFN-beta stim vs matched control"
+
+batches: [batch]
+
+extraction:
+  methods: [geo-soft, manual]
+  extracted_at: 2026-04-18T03:30:00Z
+  notes: geo-soft auto-fill; hand-edited via skills/standl/SKILL.md for factors/contrasts/condition
