@@ -246,6 +246,98 @@ def test_series_supplementary_recorded_when_samples_have_none(tmp_path):
     assert "series_supplementary_files" in (partial.notes or "")
 
 
+# -------- feature_type / library / companion heuristics --------
+
+def test_library_stem_extracts_expected_prefixes():
+    """Direct unit test for the helper — exercises the common GEO filename
+    flavours (10x triplet, hash tagmtx, CellPlex multi, raw_feature_bc)."""
+    from standl.extractors.geo_soft import _library_stem
+    assert _library_stem("GSM8677708_exp1_spleen_l1_barcodes.tsv.gz") == "exp1_spleen_l1"
+    assert _library_stem("GSM8677708_exp1_spleen_l1_features.tsv.gz") == "exp1_spleen_l1"
+    assert _library_stem("GSM8677708_exp1_spleen_l1_matrix.mtx.gz") == "exp1_spleen_l1"
+    assert _library_stem("GSM8677712_exp1_spleen_l1_hash_tagmtx.csv.gz") == "exp1_spleen_l1"
+    assert _library_stem("GSM8677714_exp2_epor_pos_multi_tagmtx.csv.gz") == "exp2_epor_pos"
+    # Real-world CellRanger h5: GSM prefix is the entire stem after the
+    # canonical bc_matrix suffix strips.
+    assert _library_stem("GSM4138110_sample_a_raw_feature_bc_matrix.h5") == "sample_a"
+    assert _library_stem("nonsense.txt") is None
+
+
+def test_feature_type_classifier():
+    from standl.extractors.geo_soft import _looks_like_feature_barcoding
+    assert _looks_like_feature_barcoding("Untreated spleen, HASH", []) is True
+    assert _looks_like_feature_barcoding("Sample, MULTI", []) is True
+    assert _looks_like_feature_barcoding("scRNA-seq", ["foo_hash_tagmtx.csv.gz"]) is True
+    assert _looks_like_feature_barcoding("scRNA-seq", []) is False
+    # "multiplexed" in title should NOT fire on the plain word.
+    assert _looks_like_feature_barcoding("multiplexed donors, scRNA-seq", []) is False
+    # Pure 10x triplet → no match.
+    assert _looks_like_feature_barcoding("PBMC 10x", ["sample_barcodes.tsv.gz"]) is False
+
+
+def test_extract_annotates_feature_type_and_companion_links(tmp_path):
+    """Synthesize a SOFT where two GSMs share library stem ``exp1_l1``
+    but one is GEX and the other HASH — companion cross-refs must land
+    on Sample.extra for both."""
+    soft = tmp_path / "GSE999001_family.soft"
+    text = FIXTURE_SOFT.read_text()
+
+    # Rewrite the 2 fixture samples: GSM999001 becomes GEX with a new
+    # library stem; GSM999002 becomes its HASH companion.
+    text = re.sub(
+        r"(!Sample_title = )[^\n]+\n(!Sample_geo_accession = GSM999001)",
+        r"\1Spleen exp1_l1, scRNA-seq\n\2", text,
+    )
+    text = re.sub(
+        r"(!Sample_title = )[^\n]+\n(!Sample_geo_accession = GSM999002)",
+        r"\1Spleen exp1_l1, HASH\n\2", text,
+    )
+    text = re.sub(
+        r"ftp://ftp\.ncbi\.nlm\.nih\.gov/geo/samples/GSM999nnn/GSM999001/suppl/GSM999001_HN01_Tumor_(barcodes|features|matrix)\.(tsv|mtx)\.gz",
+        r"ftp://ftp.ncbi.nlm.nih.gov/geo/samples/GSM999nnn/GSM999001/suppl/GSM999001_exp1_l1_\1.\2.gz",
+        text,
+    )
+    # Replace all 3 of GSM999002's supplementary files with a single HASH CSV.
+    text = re.sub(
+        r"(!Sample_supplementary_file_1 = )ftp://[^\n]+GSM999002[^\n]+",
+        r"\1ftp://ftp.ncbi.nlm.nih.gov/geo/samples/GSM999nnn/GSM999002/suppl/GSM999002_exp1_l1_hash_tagmtx.csv.gz",
+        text,
+    )
+    text = re.sub(
+        r"!Sample_supplementary_file_[23] = ftp://[^\n]+GSM999002[^\n]+\n",
+        "",
+        text,
+    )
+    soft.write_text(text)
+
+    partial = _ex().extract(Source(accessions=["GSE999001"]), cache_dir=tmp_path)
+    by_id = {s.sample_id: s for s in partial.samples}
+
+    gex, hash_s = by_id["GSM999001"], by_id["GSM999002"]
+    assert gex.extra["feature_type"].value == "gene_expression"
+    assert hash_s.extra["feature_type"].value == "feature_barcoding"
+
+    assert gex.extra["library"].value == "exp1_l1"
+    assert hash_s.extra["library"].value == "exp1_l1"
+
+    # Cross-refs populated.
+    assert hash_s.extra["companion_of"].value == "GSM999001"
+    assert gex.extra["companion_samples"].value == "GSM999002"
+
+
+def test_extract_skips_companion_link_when_no_feature_pair(tmp_path):
+    """If both samples in a library are GEX (no HASH) — no companion
+    records, just the library/feature_type annotations."""
+    partial = _ex().extract(
+        Source(accessions=["GSE999001"]),
+        cache_dir=Path(__file__).parent / "fixtures" / "geo",
+    )
+    for s in partial.samples:
+        assert s.extra["feature_type"].value == "gene_expression"
+        assert "companion_of" not in s.extra
+        assert "companion_samples" not in s.extra
+
+
 def test_sample_files_filtered_but_other_samples_keep_urls(tmp_path):
     """Mixed case: some samples NONE, some with real URLs — the non-NONE
     samples are unaffected."""

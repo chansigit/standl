@@ -39,6 +39,82 @@ _pv = make_pv("geo-soft", default_confidence=0.95)
 _GSE_ACCESSION = re.compile(r"^(GSE|GDS)\d+$")
 _GEO_BASE = "https://ftp.ncbi.nlm.nih.gov/geo/series"
 
+# ---------- feature-barcoding + library stem heuristics ----------
+#
+# Many GEO scRNA studies ship both gene-expression (GEX) and
+# feature-barcoding (HASH / MULTI / ADT / HTO / CITE / CellPlex)
+# companion libraries as separate ^SAMPLE blocks. GEO treats them as
+# peers; downstream tools (stanobj, skill) need to know which is which
+# AND which feature-barcoding GSM pairs with which GEX. standl infers
+# both heuristically — writes decisions into ``Sample.extra`` with an
+# ``evidence`` pointer, never into the canonical slots, so the skill
+# layer can override without fighting the schema.
+
+# Title or filename keywords that indicate a feature-barcoding sample.
+# Matched case-insensitively as word-ish substrings (token boundary
+# enforced by surrounding ``[\W_]`` so "MULTI" doesn't match "multiple").
+_FEAT_KEYWORDS = (
+    "hash", "hto", "adt", "cite", "cellplex", "feature_barc",
+    "multi_tag", "hash_tag", "tagmtx", "hashtag",
+)
+_FEAT_TITLE_RE = re.compile(
+    r"(?:^|[^A-Za-z])(MULTI|HASH|HTO|ADT|CITE)(?:$|[^A-Za-z])",
+    re.IGNORECASE,
+)
+
+# Canonical per-file suffixes we strip when computing a library stem.
+# Order matters — longer first so "hash_tagmtx" wins over "tagmtx".
+_FILE_SUFFIXES = (
+    "_hash_tagmtx", "_multi_tagmtx", "_tag_mtx", "_tagmtx",
+    "_hashtag", "_hto", "_adt", "_cite",
+    "_raw_feature_bc_matrix", "_filtered_feature_bc_matrix",
+    "_raw_feature", "_filtered_feature",
+    "_barcodes", "_features", "_matrix", "_genes",
+)
+_FILE_EXTENSIONS = (
+    ".tsv.gz", ".mtx.gz", ".csv.gz", ".txt.gz",
+    ".h5ad", ".h5", ".rds",
+    ".tsv", ".mtx", ".csv", ".txt",
+)
+
+
+def _strip_gsm_prefix(name: str) -> str:
+    """``GSM8677708_exp1_spleen_l1_barcodes.tsv.gz`` → ``exp1_spleen_l1_barcodes.tsv.gz``."""
+    m = re.match(r"^GSM\d+_(.+)$", name)
+    return m.group(1) if m else name
+
+
+def _library_stem(filename: str) -> str | None:
+    """Derive a library identifier from a GEO sample-file basename.
+
+    ``GSM8677708_exp1_spleen_l1_barcodes.tsv.gz`` → ``exp1_spleen_l1``
+    ``GSM8677712_exp1_spleen_l1_hash_tagmtx.csv.gz`` → ``exp1_spleen_l1``
+
+    Two samples whose first file yields the same stem are assumed to
+    belong to the same physical library. Returns ``None`` when the
+    filename doesn't carry a recognisable suffix.
+    """
+    rest = _strip_gsm_prefix(filename.rsplit("/", 1)[-1])
+    lower = rest.lower()
+    for ext in _FILE_EXTENSIONS:
+        if lower.endswith(ext):
+            rest = rest[: -len(ext)]
+            lower = lower[: -len(ext)]
+            break
+    for suffix in _FILE_SUFFIXES:
+        if lower.endswith(suffix):
+            return rest[: -len(suffix)] or None
+    # No canonical suffix — bail rather than guess.
+    return None
+
+
+def _looks_like_feature_barcoding(title: str, filenames: list[str]) -> bool:
+    """Return True when title / filenames scream "feature barcoding"."""
+    if _FEAT_TITLE_RE.search(title or ""):
+        return True
+    blob = " ".join(filenames).lower()
+    return any(k in blob for k in _FEAT_KEYWORDS)
+
 
 # ---------- SOFT parser ----------
 
@@ -196,6 +272,89 @@ def _extract_characteristics(attrs: dict[str, list[str]]) -> dict[str, Provenanc
     return out
 
 
+def _annotate_feature_types_and_libraries(
+    samples: list[PartialSample], url_map: dict[str, list[str]],
+) -> None:
+    """Populate ``Sample.extra`` with ``feature_type`` / ``library`` /
+    ``companion_of`` / ``companion_samples`` based on filename + title
+    heuristics. All writes carry ``evidence`` strings so the skill layer
+    can audit and, when wrong, override by hand-editing design.yaml.
+    """
+    # 1. Feature type classification.
+    for s in samples:
+        title_pv = s.extra.get("title")
+        title = str(title_pv.value) if title_pv else ""
+        fnames = [u.rsplit("/", 1)[-1] for u in url_map.get(s.sample_id, [])]
+        if _looks_like_feature_barcoding(title, fnames):
+            s.extra["feature_type"] = _pv(
+                "feature_barcoding",
+                "heuristic: HASH/MULTI/ADT/HTO/CITE in title or filename",
+                confidence=0.85,
+            )
+        else:
+            s.extra["feature_type"] = _pv(
+                "gene_expression",
+                "heuristic: default (no feature-barcoding signal)",
+                confidence=0.75,
+            )
+
+    # 2. Library stem extraction.
+    stems: dict[str, str] = {}  # sample_id -> stem
+    for s in samples:
+        fnames = [u.rsplit("/", 1)[-1] for u in url_map.get(s.sample_id, [])]
+        if not fnames:
+            continue
+        # Try every file; first non-None stem wins. Different files of the
+        # same library should collapse to the same stem.
+        for fname in fnames:
+            stem = _library_stem(fname)
+            if stem:
+                stems[s.sample_id] = stem
+                s.extra["library"] = _pv(
+                    stem, f"heuristic: stripped suffix from {fname!r}", confidence=0.85,
+                )
+                break
+
+    # 3. Companion linking: when a library has both a GEX and a
+    # feature-barcoding sample, record the cross-refs.
+    by_stem: dict[str, list[str]] = {}
+    for sid, stem in stems.items():
+        by_stem.setdefault(stem, []).append(sid)
+
+    for stem, sids in by_stem.items():
+        if len(sids) < 2:
+            continue
+        gex: list[str] = []
+        feat: list[str] = []
+        for sid in sids:
+            s = next((x for x in samples if x.sample_id == sid), None)
+            if s is None:
+                continue
+            ft = s.extra.get("feature_type")
+            if ft and ft.value == "feature_barcoding":
+                feat.append(sid)
+            else:
+                gex.append(sid)
+        if not (gex and feat):
+            continue
+        # Pick the first GEX in the library as the primary; real-world
+        # scRNA libraries should only have one anyway.
+        primary = gex[0]
+        for feat_sid in feat:
+            s = next(x for x in samples if x.sample_id == feat_sid)
+            s.extra["companion_of"] = _pv(
+                primary,
+                f"heuristic: shares library stem {stem!r} with a gene_expression sample",
+                confidence=0.85,
+            )
+        s_primary = next(x for x in samples if x.sample_id == primary)
+        s_primary.extra["companion_samples"] = _pv(
+            "; ".join(sorted(feat)),
+            f"heuristic: shares library stem {stem!r} with feature_barcoding samples",
+            confidence=0.85,
+        )
+
+
 def _build_partial(parsed: _Parsed, dataset_id: str) -> PartialDesign:
     series = parsed.series
     failures: dict[str, str] = {}
@@ -279,6 +438,11 @@ def _build_partial(parsed: _Parsed, dataset_id: str) -> PartialDesign:
 
     if not samples:
         failures["samples"] = "no ^SAMPLE blocks parsed from SOFT file"
+
+    # Heuristic post-pass: classify feature_type, infer library stems,
+    # cross-link GEX ↔ feature-barcoding companions within the same library.
+    # All decisions land in Sample.extra with evidence pointers.
+    _annotate_feature_types_and_libraries(samples, url_map)
 
     # Surface series-level supplementary files (common when samples all have
     # Sample_supplementary_file = NONE and the processed matrix is pooled at
