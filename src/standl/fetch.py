@@ -62,15 +62,25 @@ def _resolve_json_indirection(url: str, timeout: float) -> str:
     responds with ``application/json`` (Azul's async-prep protocol). Returns
     the resolved URL, or the input URL unchanged when the server streams the
     file directly.
+
+    Implementation note: uses ``stream=True`` and only materialises the body
+    when ``Content-Type: application/json`` is asserted. For octet-stream /
+    binary responses the body is never read — the connection is closed on
+    context-manager exit. Without this, a non-Azul download would silently
+    pull its entire body into memory just to inspect the content-type
+    header.
     """
     import requests
 
-    r = requests.get(url, timeout=timeout, allow_redirects=True)
-    r.raise_for_status()
-    if not r.headers.get("content-type", "").lower().startswith("application/json"):
-        return url
+    with requests.get(url, stream=True, timeout=timeout, allow_redirects=True) as r:
+        r.raise_for_status()
+        ct = r.headers.get("content-type", "").lower()
+        if not ct.startswith("application/json"):
+            # Not the Azul shape; the context exit closes the connection
+            # without having fetched any body bytes.
+            return url
+        data = r.json()
 
-    data = r.json()
     location = data.get("Location")
     status = data.get("Status")
     if location and status in (200, 302):

@@ -185,3 +185,49 @@ def test_download_raises_on_json_indirection_not_ready(http_server, tmp_path: Pa
 
     with _pytest.raises(IOError, match="not ready"):
         download(f"{http_server.url}/not_ready.json", tmp_path / "x.bin")
+
+
+def test_download_indirection_probe_does_not_read_body(monkeypatch, tmp_path: Path):
+    """Regression: _resolve_json_indirection used to issue a plain
+    ``requests.get(url)`` which buffers the entire body into memory when
+    the response is octet-stream (which is the common case). For a 4 GB
+    file this OOMs the process before streaming download can start. The
+    fix: use stream=True and avoid reading body for non-JSON responses.
+    """
+    from standl.fetch import _resolve_json_indirection
+    import requests
+
+    body_read_count = 0
+
+    class SpyResp:
+        status_code = 200
+        # Binary content-type — the non-JSON path.
+        headers = {"content-type": "application/octet-stream"}
+
+        def raise_for_status(self): return None
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+
+        @property
+        def content(self):
+            nonlocal body_read_count
+            body_read_count += 1
+            return b"x" * (10 << 20)  # pretend 10 MB
+
+        def json(self):
+            nonlocal body_read_count
+            body_read_count += 1
+            return {}
+
+    def spy_get(url, *args, **kwargs):
+        # The streaming fix must pass stream=True.
+        assert kwargs.get("stream") is True, "indirection probe must use stream=True"
+        return SpyResp()
+
+    monkeypatch.setattr(requests, "get", spy_get)
+    resolved = _resolve_json_indirection("http://example/big.bin", timeout=30)
+    assert resolved == "http://example/big.bin"
+    assert body_read_count == 0, (
+        f"non-JSON response body was accessed ({body_read_count}×); "
+        "indirection probe must not read the body"
+    )

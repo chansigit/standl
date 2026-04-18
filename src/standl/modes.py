@@ -348,7 +348,7 @@ def _check_h5ad_cell_count(
 
 # ---------- entry points ----------
 
-def validate(
+def _build_validate_report(
     dataset_dir: Path,
     h5ad: Path | None = None,
     *,
@@ -356,18 +356,9 @@ def validate(
     expected_cell_count: int | None = None,
     cell_count_tolerance: float = 0.1,
 ) -> AuditReport:
-    """Design ↔ manifest ↔ (optional) h5ad. Writes ``audit.md``.
-
-    Checks (each -> ok/warn/fail with evidence):
-      1. every sample.files[*] has manifest entry with status=ok
-      2. manifest files exist on disk with matching checksum (cheap: size; deep: sha256)
-      3. no orphan files in raw/ not referenced by any sample
-      4. sample_id uniqueness + filesystem-safety
-      5. contrasts reference declared factors/levels
-      6. condition not perfectly confounded with batch/donor_id (warn only)
-      7. ontology terms (CL/UBERON/EFO) resolve (if provided)
-      8. if h5ad given: obs['sample'] unique values == design.samples sample_ids
-      9. if h5ad given: obs cell count within tolerance of paper-stated count
+    """Same checks as :func:`validate`, but DOES NOT write audit.md. Used by
+    callers (``modes.run``) that need to augment the report with their own
+    records before materialising the markdown.
     """
     design = _load_design(dataset_dir)
     manifest = _load_manifest(dataset_dir)
@@ -394,6 +385,37 @@ def validate(
         for rec in _check_h5ad_cell_count(h5ad, expected_cell_count, cell_count_tolerance):
             report.add(rec)
 
+    return report
+
+
+def validate(
+    dataset_dir: Path,
+    h5ad: Path | None = None,
+    *,
+    deep: bool = False,
+    expected_cell_count: int | None = None,
+    cell_count_tolerance: float = 0.1,
+) -> AuditReport:
+    """Design ↔ manifest ↔ (optional) h5ad. Writes ``audit.md``.
+
+    Checks (each -> ok/warn/fail with evidence):
+      1. every sample.files[*] has manifest entry with status=ok
+      2. manifest files exist on disk with matching checksum (cheap: size; deep: sha256)
+      3. no orphan files in raw/ not referenced by any sample
+      4. sample_id uniqueness + filesystem-safety
+      5. contrasts reference declared factors/levels
+      6. condition not perfectly confounded with batch/donor_id (warn only)
+      7. ontology terms (CL/UBERON/EFO) resolve (if provided)
+      8. if h5ad given: obs['sample'] unique values == design.samples sample_ids
+      9. if h5ad given: obs cell count within tolerance of paper-stated count
+    """
+    report = _build_validate_report(
+        dataset_dir,
+        h5ad=h5ad,
+        deep=deep,
+        expected_cell_count=expected_cell_count,
+        cell_count_tolerance=cell_count_tolerance,
+    )
     (dataset_dir / "audit.md").write_text(render_markdown(report))
     return report
 
@@ -586,7 +608,10 @@ def run(source: Source, out_dir: Path, *, refresh: bool = False) -> AuditReport:
     _write_provenance_json(out_dir, provenance)
     _write_manifest_json(out_dir, manifest)
 
-    report = validate(out_dir)
+    # Build the report WITHOUT writing, augment with extractor failures, then
+    # write audit.md exactly once — avoids an intermediate file write the
+    # caller never sees.
+    report = _build_validate_report(out_dir)
 
     # Surface extractor partial failures so conditions like "data is pooled at
     # series level, samples all have supp=NONE" (geo-soft's ``data_layout``)
@@ -603,7 +628,6 @@ def run(source: Source, out_dir: Path, *, refresh: bool = False) -> AuditReport:
                 evidence={"extractor": p.extractor, "field": field_name, "reason": reason},
             ))
 
-    # audit.md was written by validate(); rewrite with the augmented report.
     (out_dir / "audit.md").write_text(render_markdown(report))
     return report
 
