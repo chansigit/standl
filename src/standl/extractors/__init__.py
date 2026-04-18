@@ -9,6 +9,7 @@ then lets the merger reconcile the outputs.
 from .base import DesignExtractor, register, all_extractors, pick_extractors
 
 # Import for side-effect (registration). New extractors: add import here.
+from . import cellxgene_api  # noqa: F401
 from . import geo_soft  # noqa: F401
 from . import h5ad_observed  # noqa: F401
 
