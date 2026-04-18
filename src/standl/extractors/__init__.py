@@ -10,8 +10,10 @@ from .base import DesignExtractor, register, all_extractors, pick_extractors
 
 # Import for side-effect (registration). New extractors: add import here.
 from . import cellxgene_api  # noqa: F401
+from . import figshare  # noqa: F401
 from . import geo_soft  # noqa: F401
 from . import h5ad_observed  # noqa: F401
 from . import hca_dcp  # noqa: F401
+from . import zenodo  # noqa: F401
 
 __all__ = ["DesignExtractor", "register", "all_extractors", "pick_extractors"]
