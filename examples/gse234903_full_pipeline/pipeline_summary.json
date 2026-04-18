@@ -1,0 +1,11 @@
+{
+  "dataset_id": "GSE234903",
+  "per_sample": [
+    "/tmp/gse234903/standardized/GSM7476348.h5ad",
+    "/tmp/gse234903/standardized/GSM7476349.h5ad",
+    "/tmp/gse234903/standardized/GSM7476350.h5ad",
+    "/tmp/gse234903/standardized/GSM7476351.h5ad",
+    "/tmp/gse234903/standardized/GSM7476352.h5ad"
+  ],
+  "combined": "/tmp/gse234903/standardized/combined.h5ad"
+}

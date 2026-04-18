@@ -1,0 +1,25 @@
+=== stanobj conversion audit ===
+Source: /tmp/gse234903/raw/GSM7476348/GSM7476348_2706-1-1-1-1_raw_feature.h5 (10x_h5)
+Output: /tmp/gse234903/standardized/GSM7476348.h5ad
+Timestamp: 2026-04-18T09:18:48.864669+00:00
+
+--- Detection ---
+Format: 10x_h5
+Reader: h5_reader:10x
+
+--- Standardization ---
+X contents: counts
+Orientation: genes_x_cells (transposed)
+Matrix type: counts (high, from source_metadata)
+Duplicate genes resolved: 10
+
+--- Decisions ---
+  None
+
+--- Warnings ---
+  Matrix is nearly empty (sparsity 99.9498%)
+
+--- Validation ---
+All checks passed.
+
+Shape: 317,058 cells x 36,601 genes

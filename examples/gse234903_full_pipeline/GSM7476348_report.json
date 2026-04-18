@@ -1,0 +1,37 @@
+{
+  "stanobj_version": "1.0.0",
+  "source_path": "/tmp/gse234903/raw/GSM7476348/GSM7476348_2706-1-1-1-1_raw_feature.h5",
+  "source_format": "10x_h5",
+  "decompressed": false,
+  "reader_used": "h5_reader:10x",
+  "matrix_orientation_before": "genes_x_cells",
+  "transposed": true,
+  "matrix_type": "counts",
+  "matrix_type_confidence": "high",
+  "matrix_type_source": "source_metadata",
+  "x_contents": "unknown",
+  "layers": [],
+  "main_assay": null,
+  "raw_counts_found": true,
+  "feature_types_present": [
+    "Gene Expression"
+  ],
+  "rna_only_subset_applied": false,
+  "gene_identifier_type": "unknown",
+  "duplicate_genes_resolved": 10,
+  "obs_name_strategy": null,
+  "var_name_strategy": "make_unique",
+  "n_cells_before": 317058,
+  "n_genes_before": 36601,
+  "n_cells_after": 317058,
+  "n_genes_after": 36601,
+  "embeddings_preserved": [],
+  "embeddings_dropped": [],
+  "obs_columns_standardized": {},
+  "decisions_made": {},
+  "warnings": [
+    "Matrix is nearly empty (sparsity 99.9498%)"
+  ],
+  "errors": [],
+  "conversion_timestamp": "2026-04-18T09:18:48.864419+00:00"
+}
