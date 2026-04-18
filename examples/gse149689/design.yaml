@@ -1,0 +1,334 @@
+dataset_id: GSE149689
+source:
+  accessions:
+  - GSE149689
+  repositories:
+  - GEO
+organism: Homo sapiens
+assay: Illumina NovaSeq 6000 (Homo sapiens)
+samples:
+- sample_id: GSM4509011
+  files:
+  - GSM4509011/observed.h5ad
+  accession: GSM4509011
+  organism: Homo sapiens
+  extra:
+    subject_group: COVID-19 patient
+    subject_status: severe COVID-19 patient
+    age: '63'
+    gender: M
+    cell_type: PBMC
+    title: Sample 1_nCoV 1 scRNA-seq [SW103]
+    source_name: nCoV_PBMC
+    platform_id: GPL24676
+    library_strategy: RNA-Seq
+    instrument_model: Illumina NovaSeq 6000
+- sample_id: GSM4509012
+  files:
+  - GSM4509012/observed.h5ad
+  accession: GSM4509012
+  organism: Homo sapiens
+  extra:
+    subject_group: COVID-19 patient
+    subject_status: mild COVID-19 patient
+    age: '82'
+    gender: F
+    cell_type: PBMC
+    title: Sample 2_nCoV 2 scRNA-seq [SW104]
+    source_name: nCoV_PBMC
+    platform_id: GPL24676
+    library_strategy: RNA-Seq
+    instrument_model: Illumina NovaSeq 6000
+- sample_id: GSM4509013
+  files:
+  - GSM4509013/observed.h5ad
+  accession: GSM4509013
+  organism: Homo sapiens
+  extra:
+    subject_group: Influenza patient
+    age: '68'
+    gender: M
+    cell_type: PBMC
+    title: Sample 3_Flu 1 scRNA-seq [SW105]
+    source_name: Flu_PBMC
+    platform_id: GPL24676
+    library_strategy: RNA-Seq
+    instrument_model: Illumina NovaSeq 6000
+- sample_id: GSM4509014
+  files:
+  - GSM4509014/observed.h5ad
+  accession: GSM4509014
+  organism: Homo sapiens
+  extra:
+    subject_group: Influenza patient
+    age: '75'
+    gender: F
+    cell_type: PBMC
+    title: Sample 4_Flu 2 scRNA-seq [SW106]
+    source_name: Flu_PBMC
+    platform_id: GPL24676
+    library_strategy: RNA-Seq
+    instrument_model: Illumina NovaSeq 6000
+- sample_id: GSM4509015
+  files:
+  - GSM4509015/observed.h5ad
+  accession: GSM4509015
+  organism: Homo sapiens
+  extra:
+    subject_group: healthy control
+    age: '63'
+    gender: F
+    cell_type: PBMC
+    title: Sample 5_Normal 1 scRNA-seq [SW107]
+    source_name: Normal_PBMC
+    platform_id: GPL24676
+    library_strategy: RNA-Seq
+    instrument_model: Illumina NovaSeq 6000
+- sample_id: GSM4509016
+  files:
+  - GSM4509016/observed.h5ad
+  accession: GSM4509016
+  organism: Homo sapiens
+  extra:
+    subject_group: Influenza patient
+    age: '70'
+    gender: M
+    cell_type: PBMC
+    title: Sample 6_Flu 3 scRNA-seq [SW108]
+    source_name: Flu_PBMC
+    platform_id: GPL24676
+    library_strategy: RNA-Seq
+    instrument_model: Illumina NovaSeq 6000
+- sample_id: GSM4509017
+  files:
+  - GSM4509017/observed.h5ad
+  accession: GSM4509017
+  organism: Homo sapiens
+  extra:
+    subject_group: Influenza patient
+    age: '56'
+    gender: F
+    cell_type: PBMC
+    title: Sample 7_Flu 4 scRNA-seq [SW109]
+    source_name: Flu_PBMC
+    platform_id: GPL24676
+    library_strategy: RNA-Seq
+    instrument_model: Illumina NovaSeq 6000
+- sample_id: GSM4509018
+  files:
+  - GSM4509018/observed.h5ad
+  accession: GSM4509018
+  organism: Homo sapiens
+  extra:
+    subject_group: Influenza patient
+    age: '78'
+    gender: M
+    cell_type: PBMC
+    title: Sample 8_Flu 5 scRNA-seq [SW110]
+    source_name: Flu_PBMC
+    platform_id: GPL24676
+    library_strategy: RNA-Seq
+    instrument_model: Illumina NovaSeq 6000
+- sample_id: GSM4509019
+  files:
+  - GSM4509019/observed.h5ad
+  accession: GSM4509019
+  organism: Homo sapiens
+  extra:
+    subject_group: COVID-19 patient
+    subject_status: severe COVID-19 patient
+    age: '67'
+    gender: F
+    cell_type: PBMC
+    title: Sample 9_nCoV 3 scRNA-seq [SW111]
+    source_name: nCoV_PBMC
+    platform_id: GPL24676
+    library_strategy: RNA-Seq
+    instrument_model: Illumina NovaSeq 6000
+- sample_id: GSM4509020
+  files:
+  - GSM4509020/observed.h5ad
+  accession: GSM4509020
+  organism: Homo sapiens
+  extra:
+    subject_group: COVID-19 patient
+    subject_status: severe COVID-19 patient
+    age: '67'
+    gender: F
+    cell_type: PBMC
+    title: Sample 10_nCoV 4 scRNA-seq [SW112]
+    source_name: nCoV_PBMC
+    platform_id: GPL24676
+    library_strategy: RNA-Seq
+    instrument_model: Illumina NovaSeq 6000
+- sample_id: GSM4509021
+  files:
+  - GSM4509021/observed.h5ad
+  accession: GSM4509021
+  organism: Homo sapiens
+  extra:
+    subject_group: COVID-19 patient
+    subject_status: mild COVID-19 patient
+    age: '46'
+    gender: M
+    cell_type: PBMC
+    title: Sample 11_nCoV 5 scRNA-seq [SW113]
+    source_name: nCoV_PBMC
+    platform_id: GPL24676
+    library_strategy: RNA-Seq
+    instrument_model: Illumina NovaSeq 6000
+- sample_id: GSM4509022
+  files:
+  - GSM4509022/observed.h5ad
+  accession: GSM4509022
+  organism: Homo sapiens
+  extra:
+    subject_group: COVID-19 patient
+    subject_status: mild COVID-19 patient
+    age: '38'
+    gender: F
+    cell_type: PBMC
+    title: Sample 12_nCoV 6 scRNA-seq [SW114]
+    source_name: nCoV_PBMC
+    platform_id: GPL24676
+    library_strategy: RNA-Seq
+    instrument_model: Illumina NovaSeq 6000
+- sample_id: GSM4509023
+  files:
+  - GSM4509023/observed.h5ad
+  accession: GSM4509023
+  organism: Homo sapiens
+  extra:
+    subject_group: healthy control
+    age: '54'
+    gender: F
+    cell_type: PBMC
+    title: Sample 13_Normal 2 scRNA-seq [SW115]
+    source_name: Normal_PBMC
+    platform_id: GPL24676
+    library_strategy: RNA-Seq
+    instrument_model: Illumina NovaSeq 6000
+- sample_id: GSM4509024
+  files:
+  - GSM4509024/observed.h5ad
+  accession: GSM4509024
+  organism: Homo sapiens
+  extra:
+    subject_group: healthy control
+    age: '67'
+    gender: F
+    cell_type: PBMC
+    title: Sample 14_Normal 3 scRNA-seq [SW116]
+    source_name: Normal_PBMC
+    platform_id: GPL24676
+    library_strategy: RNA-Seq
+    instrument_model: Illumina NovaSeq 6000
+- sample_id: GSM4509025
+  files:
+  - GSM4509025/observed.h5ad
+  accession: GSM4509025
+  organism: Homo sapiens
+  extra:
+    subject_group: COVID-19 patient
+    subject_status: severe COVID-19 patient
+    age: '73'
+    gender: F
+    cell_type: PBMC
+    title: Sample 15_nCoV 7 scRNA-seq [SW117]
+    source_name: nCoV_PBMC
+    platform_id: GPL24676
+    library_strategy: RNA-Seq
+    instrument_model: Illumina NovaSeq 6000
+- sample_id: GSM4509026
+  files:
+  - GSM4509026/observed.h5ad
+  accession: GSM4509026
+  organism: Homo sapiens
+  extra:
+    subject_group: COVID-19 patient
+    subject_status: severe COVID-19 patient
+    age: '73'
+    gender: F
+    cell_type: PBMC
+    title: Sample 16_nCoV 8 scRNA-seq [SW118]
+    source_name: nCoV_PBMC
+    platform_id: GPL24676
+    library_strategy: RNA-Seq
+    instrument_model: Illumina NovaSeq 6000
+- sample_id: GSM4509027
+  files:
+  - GSM4509027/observed.h5ad
+  accession: GSM4509027
+  organism: Homo sapiens
+  extra:
+    subject_group: COVID-19 patient
+    subject_status: severe COVID-19 patient
+    age: '61'
+    gender: M
+    cell_type: PBMC
+    title: Sample 17_nCoV 9 scRNA-seq [SW119]
+    source_name: nCoV_PBMC
+    platform_id: GPL24676
+    library_strategy: RNA-Seq
+    instrument_model: Illumina NovaSeq 6000
+- sample_id: GSM4509028
+  files:
+  - GSM4509028/observed.h5ad
+  accession: GSM4509028
+  organism: Homo sapiens
+  extra:
+    subject_group: COVID-19 patient
+    subject_status: mild COVID-19 patient
+    age: '61'
+    gender: M
+    cell_type: PBMC
+    title: Sample 18_nCoV 10 scRNA-seq [SW120]
+    source_name: nCoV_PBMC
+    platform_id: GPL24676
+    library_strategy: RNA-Seq
+    instrument_model: Illumina NovaSeq 6000
+- sample_id: GSM4509029
+  files:
+  - GSM4509029/observed.h5ad
+  accession: GSM4509029
+  organism: Homo sapiens
+  extra:
+    subject_group: healthy control
+    age: '63'
+    gender: M
+    cell_type: PBMC
+    title: Sample 19_Normal 4 scRNA-seq [SW121]
+    source_name: Normal_PBMC
+    platform_id: GPL24676
+    library_strategy: RNA-Seq
+    instrument_model: Illumina NovaSeq 6000
+- sample_id: GSM4509030
+  files:
+  - GSM4509030/observed.h5ad
+  accession: GSM4509030
+  organism: Homo sapiens
+  extra:
+    subject_group: COVID-19 patient
+    subject_status: Asymptomatic case of COVID-19 patient
+    age: '62'
+    gender: F
+    cell_type: PBMC
+    title: Sample 20_nCoV 11 scRNA-seq [SW122]
+    source_name: nCoV_PBMC
+    platform_id: GPL24676
+    library_strategy: RNA-Seq
+    instrument_model: Illumina NovaSeq 6000
+factors: []
+contrasts: []
+batches: []
+notes: 'Immunophenotyping of COVID-19 and Influenza Underscores the Association of
+  Type I IFN Response in Severe COVID-19 | series_supplementary_files: ftp://ftp.ncbi.nlm.nih.gov/geo/series/GSE149nnn/GSE149689/suppl/GSE149689_barcodes.tsv.gz;
+  ftp://ftp.ncbi.nlm.nih.gov/geo/series/GSE149nnn/GSE149689/suppl/GSE149689_features.tsv.gz;
+  ftp://ftp.ncbi.nlm.nih.gov/geo/series/GSE149nnn/GSE149689/suppl/GSE149689_matrix.mtx.gz
+  | split: pooled Series_supplementary_file matrix by barcode suffix (-1..-N, Series_sample_id
+  order); see scripts/demo_gse149689_rescue.py'
+extraction:
+  methods:
+  - geo-soft
+  - rescue-split
+  extracted_at: '2026-04-18T03:48:47.695217Z'

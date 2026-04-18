@@ -197,6 +197,13 @@ def merge(
             if b not in batches:
                 batches.append(b)
 
+    # Union of per-partial notes — informational (e.g. geo-soft surfaces
+    # the pooled Series_supplementary_file URLs here when the sample-level
+    # data is absent, per docs/design-schema.md). SKILL.md's rescue flow
+    # reads this, so dropping it on the floor would strand recovery.
+    notes_parts = [p.notes for p in partials if p.notes]
+    notes = " | ".join(notes_parts) if notes_parts else None
+
     design = Design(
         dataset_id=dataset_id,
         source=merged_source,
@@ -206,6 +213,7 @@ def merge(
         factors=factors,
         contrasts=contrasts,
         batches=batches,
+        notes=notes,
         extraction=Extraction(
             methods=[p.extractor for p in partials],
             extracted_at=_now(),
