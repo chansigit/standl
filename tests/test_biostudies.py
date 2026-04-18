@@ -236,6 +236,39 @@ def test_extract_splits_on_multiple_samples(monkeypatch, tmp_path: Path):
     assert by_id[f"{ACC}_Donor_A"].extra["biostudies_samples_field"].value == "Donor A"
 
 
+def test_extract_slug_collision_disambiguated(monkeypatch, tmp_path: Path):
+    """Two Samples labels that collapse to the same slug (e.g. ``"Sample 1"``
+    and ``"Sample/1"`` both become ``"Sample_1"``) must still produce two
+    distinct PartialSamples. Pre-fix the second would silently overwrite the
+    first in url_map / file_meta."""
+    from standl.extractors import biostudies as bs
+    collision = {
+        "data": [
+            {"Name": "a.h5ad", "Section": "processed-data", "Samples": "Sample 1",
+             "path": "a.h5ad", "type": "file", "size": 1},
+            # "Sample/1" slugs to "Sample_1" (slash collapses to underscore
+            # just like space does) → collides with "Sample 1" above.
+            {"Name": "b.h5ad", "Section": "processed-data", "Samples": "Sample/1",
+             "path": "b.h5ad", "type": "file", "size": 1},
+        ],
+    }
+    monkeypatch.setattr(bs, "_fetch_study", lambda acc, cache_dir: FAKE_STUDY)
+    monkeypatch.setattr(bs, "_fetch_files", lambda acc, cache_dir: collision)
+
+    partial = _ex().extract(Source(accessions=[ACC]), cache_dir=tmp_path)
+    ids = sorted(s.sample_id for s in partial.samples)
+    # Both slugs base = "Sample_1"; second got bumped to "Sample_1_2".
+    assert ids == [f"{ACC}_Sample_1", f"{ACC}_Sample_1_2"]
+    # Both url_map entries survive.
+    assert len(partial.url_map) == 2
+    assert sum(len(v) for v in partial.url_map.values()) == 2
+    # Both original labels preserved per-sample for traceability.
+    labels = sorted(
+        s.extra["biostudies_samples_field"].value for s in partial.samples
+    )
+    assert labels == ["Sample 1", "Sample/1"]
+
+
 def test_extract_single_label_groups_merge_back(monkeypatch, tmp_path: Path):
     """With only one non-empty Samples label, the output stays a single
     accession-keyed PartialSample (no split) — mixing in with any empty-

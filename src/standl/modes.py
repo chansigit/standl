@@ -282,12 +282,33 @@ def _check_ontology_format(design: Design) -> list[AuditRecord]:
     return recs
 
 
-def _check_h5ad_samples_match(design: Design, h5ad_path: Path) -> list[AuditRecord]:
+def _load_anndata_or_none(h5ad_path: Path) -> tuple[Any, str | None]:
+    """Open ``h5ad_path`` once. Returns ``(anndata, None)`` on success or
+    ``(None, skip_reason)`` when anndata is unavailable / the file is
+    unreadable. Callers fan out to the individual h5ad checks, each of
+    which accepts the shared AnnData so the on-disk file is read exactly
+    once per ``validate()`` invocation — previously both checks called
+    ``ad.read_h5ad`` independently, doubling IO + memory on GB-scale files.
+    """
     try:
         import anndata as ad
     except ImportError:
-        return [_warn("h5ad_samples_match", "anndata not installed; check skipped", {"h5ad": str(h5ad_path)})]
-    a = ad.read_h5ad(h5ad_path)
+        return None, "anndata not installed; check skipped"
+    try:
+        return ad.read_h5ad(h5ad_path), None
+    except Exception as e:  # noqa: BLE001 — corrupt file / permission / etc.
+        return None, f"failed to read h5ad: {type(e).__name__}: {e}"
+
+
+def _check_h5ad_samples_match(
+    design: Design, h5ad_path: Path, a: Any | None, skip_reason: str | None,
+) -> list[AuditRecord]:
+    if a is None:
+        return [_warn(
+            "h5ad_samples_match",
+            skip_reason or "h5ad unavailable; check skipped",
+            {"h5ad": str(h5ad_path)},
+        )]
     if "sample" not in a.obs.columns:
         return [_fail(
             "h5ad_samples_match",
@@ -321,16 +342,19 @@ def _check_h5ad_samples_match(design: Design, h5ad_path: Path) -> list[AuditReco
 
 def _check_h5ad_cell_count(
     h5ad_path: Path,
+    a: Any | None,
+    skip_reason: str | None,
     expected: int | None,
     tolerance: float,
 ) -> list[AuditRecord]:
-    try:
-        import anndata as ad
-    except ImportError:
-        return [_warn("h5ad_cell_count", "anndata not installed; check skipped", {"h5ad": str(h5ad_path)})]
+    if a is None:
+        return [_warn(
+            "h5ad_cell_count",
+            skip_reason or "h5ad unavailable; check skipped",
+            {"h5ad": str(h5ad_path)},
+        )]
     if expected is None:
         return [_ok("h5ad_cell_count", "no expected cell count provided; check skipped")]
-    a = ad.read_h5ad(h5ad_path)
     got = a.n_obs
     lo = expected * (1 - tolerance)
     hi = expected * (1 + tolerance)
@@ -380,9 +404,12 @@ def _build_validate_report(
         report.add(rec)
 
     if h5ad is not None:
-        for rec in _check_h5ad_samples_match(design, h5ad):
+        a, skip_reason = _load_anndata_or_none(h5ad)
+        for rec in _check_h5ad_samples_match(design, h5ad, a, skip_reason):
             report.add(rec)
-        for rec in _check_h5ad_cell_count(h5ad, expected_cell_count, cell_count_tolerance):
+        for rec in _check_h5ad_cell_count(
+            h5ad, a, skip_reason, expected_cell_count, cell_count_tolerance,
+        ):
             report.add(rec)
 
     return report
@@ -526,7 +553,7 @@ def run(source: Source, out_dir: Path, *, refresh: bool = False) -> AuditReport:
     6. Call ``validate`` to produce audit.md and return the AuditReport.
     """
     from .extractors import pick_extractors
-    from .fetch import download
+    from .fetch import ChecksumMismatch, download
 
     out_dir.mkdir(parents=True, exist_ok=True)
     paper_cache = out_dir / "paper"
@@ -590,6 +617,10 @@ def run(source: Source, out_dir: Path, *, refresh: bool = False) -> AuditReport:
         created_at=_now(),
     )
 
+    # Per-entry download errors collected here; surfaced as audit records
+    # after validate() runs so audit.md distinguishes "network/404" from
+    # "sha256 mismatch" instead of conflating both as ``status=missing``.
+    download_errors: list[tuple[ManifestEntry, str, str]] = []
     for entry in manifest.entries:
         dest = raw_dir / entry.path
         try:
@@ -601,8 +632,17 @@ def run(source: Source, out_dir: Path, *, refresh: bool = False) -> AuditReport:
             entry.sha256 = result.sha256
             entry.status = "ok"
             entry.downloaded_at = _now()
-        except Exception:  # noqa: BLE001 — record the failure, keep going
+        except ChecksumMismatch as e:
+            # Bytes arrived; their sha256 didn't match the upstream-asserted
+            # value. Trust failure, not a connectivity one. ChecksumMismatch
+            # is deliberately its own class (subclass of IOError) so this
+            # branch doesn't swallow ``requests.HTTPError`` — which also
+            # inherits from IOError and would otherwise be miscategorised.
+            entry.status = "corrupt"
+            download_errors.append((entry, "corrupt", f"{type(e).__name__}: {e}"))
+        except Exception as e:  # noqa: BLE001
             entry.status = "missing"
+            download_errors.append((entry, "missing", f"{type(e).__name__}: {e}"))
 
     _write_design_yaml(out_dir, merged_design)
     _write_provenance_json(out_dir, provenance)
@@ -627,6 +667,23 @@ def run(source: Source, out_dir: Path, *, refresh: bool = False) -> AuditReport:
                 message=f"{p.extractor!r} could not extract {field_name!r}: {reason}",
                 evidence={"extractor": p.extractor, "field": field_name, "reason": reason},
             ))
+
+    # Per-entry download failures as structured audit records — `status=corrupt`
+    # (sha256 mismatched upstream) is semantically different from
+    # `status=missing` (404 / network / timeout), and audit.md now says so
+    # instead of burying both under the files_on_disk "file not found".
+    for entry, kind, detail in download_errors:
+        report.add(AuditRecord(
+            check="download_failed",
+            status=Severity.FAIL,
+            message=f"{entry.path!r} failed to download ({kind}): {detail}",
+            evidence={
+                "path": entry.path,
+                "url": entry.url,
+                "kind": kind,
+                "error": detail,
+            },
+        ))
 
     (out_dir / "audit.md").write_text(render_markdown(report))
     return report
@@ -797,9 +854,12 @@ def meta_check(
         # no existing design, the only sample set we have *is* the merged
         # one, so compare against that as a trivial consistency check.
         compare_against = existing_design if existing_design is not None else merged_design
-        for rec in _check_h5ad_samples_match(compare_against, Path(h5ad)):
+        a, skip_reason = _load_anndata_or_none(Path(h5ad))
+        for rec in _check_h5ad_samples_match(compare_against, Path(h5ad), a, skip_reason):
             report.add(rec)
-        for rec in _check_h5ad_cell_count(Path(h5ad), expected_cell_count, cell_count_tolerance):
+        for rec in _check_h5ad_cell_count(
+            Path(h5ad), a, skip_reason, expected_cell_count, cell_count_tolerance,
+        ):
             report.add(rec)
 
     for name, reason in paper_failures:

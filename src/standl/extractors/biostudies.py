@@ -133,6 +133,24 @@ def _slug(label: str) -> str:
     return s or "unassigned"
 
 
+def _uniquify(base: str, taken: set[str]) -> str:
+    """Return ``base`` if unused; otherwise ``base_2`` / ``base_3`` / … until
+    unique. Guards against ``_slug`` collapsing distinct labels (``"Sample 1"``
+    and ``"Sample-1"`` both produce ``"Sample_1"``) — without this the second
+    PartialSample's url_map would silently overwrite the first.
+    """
+    if base not in taken:
+        taken.add(base)
+        return base
+    n = 2
+    while True:
+        candidate = f"{base}_{n}"
+        if candidate not in taken:
+            taken.add(candidate)
+            return candidate
+        n += 1
+
+
 def _group_files_by_samples(
     all_data: list[dict[str, Any]],
 ) -> tuple[dict[str, list[dict[str, Any]]], int]:
@@ -284,9 +302,14 @@ def _build_partial(
     if len(labels_with_files) >= 2:
         # Real per-sample grouping — emit one PartialSample per distinct label.
         # Files with empty Samples (shared / study-level) attach to a sibling
-        # "_unassigned" sample so they don't get silently dropped.
+        # "_unassigned" sample so they don't get silently dropped. Slug
+        # collisions are resolved with a numeric suffix so we never drop a
+        # group.
+        taken_slugs: set[str] = set()
         for label, files in non_empty.items():
-            sid = f"{accession}_{_slug(label)}" if label else f"{accession}_unassigned"
+            base = _slug(label) if label else "unassigned"
+            suffix = _uniquify(base, taken_slugs)
+            sid = f"{accession}_{suffix}"
             s, urls, metas = _build_sample(accession, sid, label or None, files, organism_pv, merged)
             samples.append(s)
             url_map[sid] = urls

@@ -43,6 +43,16 @@ class DownloadResult:
     fresh: bool  # True if we fetched, False if the cache already matched
 
 
+class ChecksumMismatch(IOError):
+    """Raised when a fresh download's sha256 doesn't match the caller-asserted
+    value. Inherits from ``IOError`` so catch-`IOError` code keeps working,
+    but stands out as its own class so callers that need to distinguish
+    "bytes arrived but wrong" (corrupt) from "bytes never arrived" (404 /
+    network) can do so — notably ``modes.run`` uses this to tag
+    ManifestEntry.status = 'corrupt' vs 'missing'.
+    """
+
+
 def _sha256_file(p: Path, chunk: int = 1 << 20) -> str:
     h = hashlib.sha256()
     with p.open("rb") as fh:
@@ -147,7 +157,7 @@ def download(
     got = h.hexdigest()
     if sha256 is not None and got != sha256:
         dest.unlink(missing_ok=True)
-        raise IOError(
+        raise ChecksumMismatch(
             f"sha256 mismatch for {url}: expected {sha256}, got {got}",
         )
 

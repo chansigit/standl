@@ -127,6 +127,53 @@ def test_run_marks_entries_missing_when_downloads_404(http_server, tmp_path: Pat
         r.check == "files_on_disk" and r.status == "fail"
         for r in report.records
     )
+    # New diagnostic: dedicated download_failed records per entry, kind="missing"
+    # (404 / network), not conflated with sha256 mismatch.
+    fails = [r for r in report.records if r.check == "download_failed"]
+    assert fails, "expected download_failed audit records on 404"
+    assert all(r.evidence["kind"] == "missing" for r in fails)
+
+
+def test_run_download_sha256_mismatch_emits_corrupt_record(
+    http_server, tmp_path: Path, monkeypatch,
+):
+    """sha256 mismatch is a different failure mode from 404 — it means the
+    upstream gave us bytes but their content hash doesn't match the API's
+    assertion. modes.run must tag the entry status=corrupt and emit a
+    download_failed record with kind='corrupt'."""
+    from standl.modes import run
+    from standl.schema import Source, PartialDesign, PartialSample, ProvenancedValue
+    from standl.extractors.geo_soft import GEOSoftExtractor
+
+    _populate_server(http_server.root)  # server serves 20-byte payloads
+
+    # Have geo-soft publish a wrong sha256 so fetch.download rejects the body.
+    def fake_extract(self, source, cache_dir):
+        sid = "GSM999001"
+        rel = f"{sid}/GSM999001_HN01_Tumor_matrix.mtx.gz"
+        url = f"{http_server.url}/GSM999001_HN01_Tumor_matrix.mtx.gz"
+        return PartialDesign(
+            extractor="geo-soft",
+            dataset_id="GSE999001",
+            source=Source(accessions=["GSE999001"], repositories=["GEO"]),
+            samples=[PartialSample(
+                sample_id=sid,
+                files=ProvenancedValue(value=[rel], source="geo-soft", confidence=0.95),
+            )],
+            url_map={sid: [url]},
+            file_meta={sid: [{"sha256": "0" * 64}]},  # wrong — server serves "payload\n"
+        )
+    monkeypatch.setattr(GEOSoftExtractor, "extract", fake_extract)
+
+    out_dir = tmp_path / "ds"
+    report = run(Source(accessions=["GSE999001"]), out_dir)
+
+    manifest = json.loads((out_dir / "manifest.json").read_text())
+    assert any(e["status"] == "corrupt" for e in manifest["entries"])
+
+    fails = [r for r in report.records if r.check == "download_failed"]
+    assert fails
+    assert any(r.evidence["kind"] == "corrupt" for r in fails)
 
 
 # -------- no applicable extractor --------
