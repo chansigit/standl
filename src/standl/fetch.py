@@ -5,7 +5,7 @@ Idempotency is a hard requirement — re-running ``standl run`` on the same
 dataset directory must not re-fetch files that already match the expected
 checksum.
 
-Two sugar behaviors on top of a plain streaming download:
+Three sugar behaviors on top of a plain streaming download:
 
 - **FTP→HTTPS rewrite.** GEO emits FTP URLs (``ftp://ftp.ncbi.nlm.nih.gov/...``)
   which requests doesn't speak natively; the NCBI mirror serves the same tree
@@ -14,6 +14,12 @@ Two sugar behaviors on top of a plain streaming download:
 - **Cached short-circuit.** If ``dest`` exists and ``sha256`` (or, failing
   that, ``expected_size``) matches, we skip the download and return
   ``fresh=False``. Mismatches trigger a fresh fetch.
+- **JSON Status/Location redirect.** HCA DCP's Azul API (and any analogous
+  async-prep endpoint) returns ``{Status: 302, Location: <signed URL>}``
+  with ``Content-Type: application/json`` instead of an HTTP 302. When we
+  see that shape we follow the ``Location`` once — one level of
+  indirection, not a full poll loop. Async-not-ready responses (Status 301
+  with Retry-After) raise an IOError so callers can decide to back off.
 
 Any sha256 mismatch *after* a fresh download deletes the on-disk file and
 raises — garbage on disk is worse than a clear error.
@@ -49,6 +55,30 @@ def _normalize_url(url: str) -> str:
     if url.startswith(_NCBI_FTP_PREFIX):
         return _NCBI_HTTPS_PREFIX + url[len(_NCBI_FTP_PREFIX):]
     return url
+
+
+def _resolve_json_indirection(url: str, timeout: float) -> str:
+    """Follow a single ``{Status, Location}`` JSON redirect if the server
+    responds with ``application/json`` (Azul's async-prep protocol). Returns
+    the resolved URL, or the input URL unchanged when the server streams the
+    file directly.
+    """
+    import requests
+
+    r = requests.get(url, timeout=timeout, allow_redirects=True)
+    r.raise_for_status()
+    if not r.headers.get("content-type", "").lower().startswith("application/json"):
+        return url
+
+    data = r.json()
+    location = data.get("Location")
+    status = data.get("Status")
+    if location and status in (200, 302):
+        return str(location)
+    raise IOError(
+        f"indirection target at {url} is not ready (Status={status!r}, "
+        f"Retry-After={data.get('Retry-After')!r}); retry later"
+    )
 
 
 def download(
@@ -89,9 +119,13 @@ def download(
                 fresh=False,
             )
 
+    resolved = _resolve_json_indirection(
+        _normalize_url(url), timeout=timeout,
+    )
+
     dest.parent.mkdir(parents=True, exist_ok=True)
     h = hashlib.sha256()
-    with requests.get(_normalize_url(url), stream=True, timeout=timeout) as r:
+    with requests.get(resolved, stream=True, timeout=timeout) as r:
         r.raise_for_status()
         with dest.open("wb") as fh:
             for chunk in r.iter_content(chunk_size=chunk_size):

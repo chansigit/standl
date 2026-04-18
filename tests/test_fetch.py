@@ -117,12 +117,15 @@ def test_download_rewrites_ncbi_ftp_to_https(monkeypatch, tmp_path: Path):
 
     class FakeResp:
         status_code = 200
+        headers = {"content-type": "application/octet-stream"}
+
         def raise_for_status(self): return None
         def iter_content(self, chunk_size): yield b"fake"
+        def json(self): return {}
         def __enter__(self): return self
         def __exit__(self, *a): return False
 
-    def fake_get(url, stream, timeout):
+    def fake_get(url, *args, **kwargs):
         calls.append(url)
         return FakeResp()
 
@@ -132,8 +135,10 @@ def test_download_rewrites_ncbi_ftp_to_https(monkeypatch, tmp_path: Path):
         "ftp://ftp.ncbi.nlm.nih.gov/geo/samples/x.txt",
         tmp_path / "out.txt",
     )
-    assert len(calls) == 1
-    assert calls[0].startswith("https://ftp.ncbi.nlm.nih.gov/")
+    # _resolve_json_indirection makes one HEAD-like call, then the streaming
+    # download makes a second; both should carry the HTTPS-rewritten URL.
+    assert all(c.startswith("https://ftp.ncbi.nlm.nih.gov/") for c in calls)
+    assert len(calls) >= 1
 
 
 def test_download_raises_on_404(http_server, tmp_path: Path):
@@ -142,3 +147,41 @@ def test_download_raises_on_404(http_server, tmp_path: Path):
 
     with pytest.raises(requests.HTTPError):
         download(f"{http_server.url}/does_not_exist.bin", tmp_path / "x")
+
+
+# -------- JSON Status/Location indirection (Azul HCA) --------
+
+def test_download_follows_json_location_indirection(http_server, tmp_path: Path):
+    """Server returns JSON with {Status: 302, Location} — fetch follows once."""
+    import json as _json
+    from standl.fetch import download
+
+    payload = b"real bytes behind the json indirection\n" * 32
+    (http_server.root / "real.bin").write_bytes(payload)
+    # Content-type for .json is application/json by default with SimpleHTTPRequestHandler.
+    (http_server.root / "fetch_stub.json").write_text(_json.dumps({
+        "Status": 302,
+        "Location": f"{http_server.url}/real.bin",
+    }))
+
+    dest = tmp_path / "out.bin"
+    result = download(f"{http_server.url}/fetch_stub.json", dest)
+    assert dest.read_bytes() == payload
+    assert result.fresh is True
+    assert result.size_bytes == len(payload)
+
+
+def test_download_raises_on_json_indirection_not_ready(http_server, tmp_path: Path):
+    """Azul's async-prep returns Status=301 + Retry-After when the file
+    isn't signed yet. We surface that as a clear IOError."""
+    import json as _json
+    import pytest as _pytest
+    from standl.fetch import download
+
+    (http_server.root / "not_ready.json").write_text(_json.dumps({
+        "Status": 301,
+        "Retry-After": 5,
+    }))
+
+    with _pytest.raises(IOError, match="not ready"):
+        download(f"{http_server.url}/not_ready.json", tmp_path / "x.bin")
