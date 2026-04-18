@@ -11,8 +11,9 @@ Design decisions already made (don't re-litigate without cause):
 - Three CLI modes: `run` (full), `validate` (files already local),
   `meta-check` (only verify metadata, don't overwrite design.yaml).
 - GEO is a moving target — `geo-soft` extractor is "wide-in, narrow-out",
-  deterministic facts only. Condition/batch/contrast inference belongs to
-  `llm-paper`.
+  deterministic facts only. Condition/batch/contrast inference is a
+  human-in-the-loop step performed by Claude Code (see
+  `skills/standl/SKILL.md`), not a registered programmatic extractor.
 - Failures are recorded (`PartialDesign.failures`, `audit.md`), not raised.
 
 ## Implementation order
@@ -57,17 +58,18 @@ Deliverables:
 - Do **not** parse free-text into `condition`/`batch` — that's step 4's job.
 - Fixture: cache a real SOFT file under `tests/fixtures/geo/` and test offline.
 
-### 4. `llm-paper` extractor
+### 4. ~~`llm-paper` extractor~~ — deferred; replaced by a skill-driven flow
 
-Schema-constrained Anthropic tool-use to produce `PartialDesign` from paper
-text (PMC XML preferred, PDF fallback).
+Rather than ship a bespoke Anthropic tool-use client inside the package, the
+paper-reading step is run by Claude Code (or a human) via
+`skills/standl/SKILL.md`. The skill describes how to read the paper, fill
+`design.yaml` by hand, and cross-validate against what `geo-soft` observed.
+That output lands in the merger as a `manual` `PartialDesign` at
+confidence 1.0 — the highest-priority source — so downstream consumers see
+exactly the same artifacts they would from an automated extractor.
 
-Deliverables:
-- Paper resolution: DOI → PMC XML / bioRxiv / publisher PDF; cache to disk.
-- Tool-use call with `PartialDesign` JSON schema as the tool input schema.
-- Per-field evidence pointers ("Methods §3", "Table S2 row 4"); confidence
-  drops when evidence is missing.
-- Prompt caching on the paper text (paper is large, schema is stable).
+Re-instate a programmatic `llm-paper` extractor only when batch / CI use
+cases demand it. Until then, `llm-paper` is not a registered extractor.
 
 ### 5. `modes.run` — tie it together
 

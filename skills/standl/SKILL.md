@@ -4,12 +4,12 @@ description: >
   Use when the user asks to "download single-cell data", "fetch GEO dataset",
   "get data from a paper", "extract experimental design", "parse study metadata",
   "figure out what samples a paper has", or gives a DOI / PMC URL / bioRxiv URL /
-  GEO (GSE/GSM) / ArrayExpress / CELLxGENE / HCA accession and expects raw files
-  + a structured design. standl is the upstream entry of the stan* pipeline and
-  produces design.yaml + manifest.json + raw/ for stanobj to consume. Do NOT use
-  for format conversion (that is stanobj), gene harmonization (stangene), count
-  recovery (stancounts), or plotting (stanhue).
-version: 0.1.0
+  GEO (GSE/GSM) accession and expects raw files + a structured design. standl is
+  the upstream entry of the stan* pipeline and produces design.yaml +
+  manifest.json + raw/ for stanobj to consume. Do NOT use for format conversion
+  (that is stanobj), gene harmonization (stangene), count recovery (stancounts),
+  or plotting (stanhue).
+version: 0.2.0
 allowed-tools: [Bash, Read, Write, Edit, Glob, Grep, WebFetch]
 ---
 
@@ -26,63 +26,125 @@ Given a paper or accession, produce a self-contained dataset directory:
   audit.md          # design ↔ data consistency report
 ```
 
+## You are the paper extractor
+
+standl ships two programmatic extractors: `geo-soft` (SOFT/MINiML parser) and
+`h5ad-observed` (reads an existing processed h5ad). Neither reads papers.
+
+When a paper needs to be read to fill in `condition`, `batch`, `donor_id`,
+`contrasts`, or cell-count claims, **you do it**: WebFetch the PMC XML / PDF,
+read the Methods / Tables / Figure legends, write the relevant fields into
+`design.yaml` by hand. The merger treats hand-edited `design.yaml` as a
+`manual` source at confidence 1.0 — the highest-priority slot — so your work
+outranks every programmatic extractor on conflicts.
+
+This replaces the deferred `llm-paper` extractor; it's the same LLM
+(you), just without the intermediate RPC.
+
 ## Principles
 
 - **Schema first.** `design.yaml` is the stable contract. See
-  `docs/design-schema.md` (in repo) for the authoritative schema.
+  `docs/design-schema.md` for the authoritative schema.
 - **Closed loop.** Design extraction tells us what files *should* exist;
   downloading tells us what files *do* exist; validation reconciles the two.
   Never skip the reconciliation step — it is the whole point of this tool.
 - **No silent failures.** Inconsistencies go to `audit.md` with severity,
   not exceptions. Downstream tools read `audit.md` to decide whether to run.
-- **Offline after `standl`.** This is the only stage that touches the network.
-  Downstream stan* tools must be able to run fully offline from the output dir.
+- **Offline after `standl`.** The CLI stages that touch the network are
+  `run` (downloads) and `geo-soft` (fetches SOFT). Downstream stan* tools
+  run fully offline from the output dir.
 
-## Three modes
+## Three CLI modes
 
 | command | when to use |
 |---|---|
-| `standl run <source> -o <dir>` | Starting fresh: extract design + download + validate |
+| `standl run <source> -o <dir>` | Starting fresh from a GEO accession: geo-soft extracts, fetch downloads, validate writes audit.md |
 | `standl validate <dir> [--h5ad X]` | Files already downloaded; reconcile with design.yaml |
-| `standl meta-check <dir> [--paper URL]` | h5ad already processed; only verify paper/metadata claims — no downloads |
+| `standl meta-check <dir> [--paper URL] [--h5ad X] [--write-design]` | h5ad already processed; verify paper/metadata claims — read-only by default |
 
-The third mode covers the "data's here, just tell me if the labels are right"
-case. It re-runs extractors on the paper, reads ``obs`` from the h5ad, and
-diffs them into ``audit.md``. Read-only by default.
+## The typical flow (GEO accession with a paper)
 
-## Extractors are pluggable, not hardcoded
+1. **Kick off the deterministic pass.** Run `standl run GSE123456 -o datasets/GSE123456`.
+   - `geo-soft` fetches `GSE123456_family.soft.gz`, extracts sample skeletons
+     (GSM ids, `Sample_characteristics_ch1` → `Sample.extra`, supplementary
+     URLs → `sample.files` relative paths).
+   - `fetch` pulls each supplementary file to `raw/<GSM>/<basename>`.
+   - `validate` writes `audit.md`.
+2. **Read the paper.** Use WebFetch on the DOI / PMC URL. If the publisher
+   blocks, grab the bioRxiv preprint or the PMC XML. Cache under `<dir>/paper/`.
+3. **Fill in the human-only fields.** Edit `design.yaml` to add:
+   - `condition` — the primary factor level per sample (e.g. `tumor`, `control`).
+     GEO often has the raw string in `Sample.extra["tissue"]` already;
+     cross-reference the paper's Methods to decide the canonical level name.
+   - `donor_id` — collapse per-sample donor info from `Sample.extra["donor"]`
+     or from paper tables.
+   - `batch` — processing batch if disclosed (often in Methods' "data generation"
+     section). Warn if not stated; leave `None`.
+   - `timepoint`, `replicate`, `sex`, `age` — similarly.
+   - `factors` + `contrasts` — the comparisons the paper actually makes
+     (e.g. `Figure 2a: tumor vs PBL`). Put the figure/table ref into
+     `Contrast.source`.
+   - Fix `sample_id` to whatever the paper + h5ad will use downstream (often
+     a human-readable label like `HN01_Tumor`, NOT the GSM id). Keep the
+     GSM in `accession`.
+4. **Re-validate.** `standl validate <dir>` → check `audit.md`. Common fails:
+   - A `sample.files[*]` no longer matches a manifest entry because you
+     renamed `sample_id` — update the `files` paths to match the new id.
+   - `condition` perfectly confounded with `batch` / `donor_id` — emit a
+     warning to the user; don't try to hide it.
+   - Contrast references a factor/level that doesn't exist — typo or missing
+     level declaration.
+5. **Optional: cross-check against an existing h5ad.**
+   `standl meta-check <dir> --h5ad processed.h5ad` surfaces disagreements
+   between your `design.yaml` and `obs` in the h5ad.
 
-The core never says "if GSE, use GEO parser". Each extractor implements
-``can_handle(source) -> float`` and self-rates. The merger runs *every*
-extractor above threshold and reconciles per-field, so GEO format drift
-degrades one extractor's confidence instead of breaking the pipeline.
+## Paper-first flow (DOI only, accessions unknown)
 
-Known extractors (schemas first, implementations stubbed):
-- ``geo-soft`` — deterministic facts from SOFT/MINiML/series-matrix
-- ``llm-paper`` — condition/batch/contrast from PDF/PMC XML
+If the user hands you a DOI with no GEO accession in the paper:
 
-Add a new source: drop a module under ``src/standl/extractors/`` with a
-class satisfying the ``DesignExtractor`` protocol, call ``register(...)``.
-Import it from ``extractors/__init__.py``. No core changes needed.
+1. Read the paper first. Look in Methods and Data Availability for the
+   accession (`GSE*`, `PRJNA*`, `E-MTAB-*`, CxG collection id, …).
+2. Tell the user which accession you found; confirm before starting downloads.
+3. Then run the flow above with the confirmed accession.
 
-## When to pick paper-first vs data-first
-
-- **Paper-first** (DOI / PMC / bioRxiv URL): extract first to discover which
-  accessions and files to pull.
-- **Data-first** (GSE / accession only): pull metadata first (SOFT/MINiML),
-  cross-reference to the paper, then decide whether raw or processed files
-  are needed.
+Papers that deposit only to controlled-access repositories (dbGaP, EGA) are
+**out of scope** for standl — flag to the user.
 
 ## Cross-validation checklist
 
-When producing `audit.md`, check:
+When producing / updating `audit.md`, these nine checks are what `validate`
+enforces. Your hand-edits to `design.yaml` should leave them all `ok`:
 
 1. Every `sample.files[*]` resolves to an `ok` entry in `manifest.json`.
-2. Paper-stated sample count matches `len(design.samples)`.
-3. Paper-stated cell count is within tolerance of data (if h5ad available).
-4. `sample_id` values unique and filesystem-safe.
-5. Contrast-referenced factors/levels exist.
+2. Manifest-listed files exist on disk (size match; sha256 in `--deep`).
+3. No orphan files in `raw/` not referenced by any sample.
+4. `sample_id` values unique and filesystem-safe (`[A-Za-z0-9_.-]`, no `..`).
+5. Contrast-referenced factors / levels are declared.
 6. `condition` not perfectly confounded with `batch` / `donor_id` (warn).
-7. Ontology terms resolve (CL / UBERON / EFO) when present.
+7. Ontology terms (CL / UBERON / EFO / MONDO) match `^PREFIX:\d+$`.
+8. If h5ad given: `obs['sample']` unique values == design sample_ids.
+9. If h5ad given: cell count within tolerance of `expected_cell_count`.
 
-Each item: `ok` / `warn` / `fail` with evidence.
+## When to stop and ask
+
+- The paper's sample count doesn't match GEO's sample count → tell the user,
+  don't paper over it.
+- You can't resolve the paper (no PMC, no bioRxiv, paywalled PDF that
+  WebFetch bounces) → ask the user to drop the PDF locally, then Read it.
+- Ambiguous condition labels ("treated" vs "stimulated" vs "activated" used
+  interchangeably) → propose a canonical label, confirm with the user.
+
+## Extractors are pluggable
+
+The core never says "if GSE, use GEO parser". Each extractor implements
+`can_handle(source) -> float` and self-rates. The merger runs *every*
+extractor above threshold and reconciles per-field, so GEO format drift
+degrades one extractor's confidence instead of breaking the pipeline.
+
+Known registered extractors:
+- `geo-soft` — deterministic facts from SOFT/MINiML/series-matrix.
+- `h5ad-observed` — reads an existing processed h5ad's `obs` / `uns`.
+
+Add a new source: drop a module under `src/standl/extractors/` with a
+class satisfying the `DesignExtractor` protocol, call `register(...)`.
+Import it from `extractors/__init__.py`. No core changes needed.

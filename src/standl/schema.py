@@ -26,7 +26,7 @@ T = TypeVar("T")
 class ProvenancedValue(BaseModel, Generic[T]):
     """A value carrying where it came from and how confident we are."""
     value: T
-    source: str                # extractor name, e.g. "geo-soft", "llm-paper"
+    source: str                # extractor name, e.g. "geo-soft", "manual"
     confidence: float = 1.0    # 0-1
     evidence: str | None = None  # free-form pointer (e.g. "Figure 1c caption")
 
@@ -78,7 +78,7 @@ class Contrast(BaseModel):
 
 class Extraction(BaseModel):
     """Top-level extraction summary. Per-field attribution lives in provenance.json."""
-    methods: list[str]                  # e.g. ["geo-soft", "llm-paper"]
+    methods: list[str]                  # e.g. ["geo-soft", "manual"]
     extracted_at: datetime
     notes: str | None = None
 
@@ -133,6 +133,11 @@ class PartialDesign(BaseModel):
     contrasts: list[Contrast] = Field(default_factory=list)
     batches: list[str] = Field(default_factory=list)
     notes: str | None = None
+    # sample_id -> source URLs. Populated by extractors that know where the
+    # raw files live (geo-soft, cellxgene-api, ...). Consumed by modes.run
+    # to drive manifest.json + downloads. Sample.files carries the downloaded
+    # relative paths; url_map carries the remote URLs in parallel.
+    url_map: dict[str, list[str]] = Field(default_factory=dict)
     # Fields we tried but couldn't fill — "source changed format" etc.
     failures: dict[str, str] = Field(default_factory=dict)
 

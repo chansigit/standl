@@ -37,13 +37,18 @@ from .schema import (
 
 
 # Higher = preferred when confidences tie.
+# Human-entered beats any programmatic extractor; data-observed (h5ad) ranks
+# high because it's verifiable against the actual file being processed
+# downstream. Paper extraction is deliberately NOT in the registry — the
+# stan* flow asks Claude Code / a human to read the paper and write design.yaml
+# directly (promoted as "manual"), see skills/standl/SKILL.md.
 DEFAULT_PRIORITY = {
+    "manual": 1000,
     "geo-soft": 100,
-    "cellxgene-api": 95,
-    "hca-dcp": 95,
-    "arrayexpress": 90,
-    "llm-paper": 50,
-    "manual": 1000,  # human-entered always wins
+    "h5ad-observed": 95,
+    "cellxgene-api": 90,
+    "hca-dcp": 90,
+    "arrayexpress": 85,
 }
 
 

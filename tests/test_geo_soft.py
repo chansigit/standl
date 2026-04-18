@@ -8,7 +8,8 @@ case and verifies we record a failure instead of raising.
 Per the wide-in / narrow-out policy, the extractor must:
   - put every ``Sample_characteristics_ch1 = k: v`` into ``Sample.extra[k]`` verbatim;
   - NOT promote characteristics keys into canonical fields (``condition``,
-    ``batch``, ``donor_id``) — that's llm-paper's job;
+    ``batch``, ``donor_id``) — that is a human-in-the-loop step via the
+    ``standl`` skill;
   - surface ``Sample_supplementary_file_*`` URLs into ``sample.files``;
   - fall back to ``failures`` when a field is missing, never raise.
 """
@@ -97,16 +98,33 @@ def test_extract_sample_organism_from_sample_organism_ch1(cache_with_soft: Path)
     assert s.organism.value == "Homo sapiens"
 
 
-def test_extract_supplementary_files_go_into_sample_files(cache_with_soft: Path):
+def test_extract_supplementary_files_become_relative_paths(cache_with_soft: Path):
+    """sample.files holds local relative paths under raw/, not URLs."""
     partial = _ex().extract(Source(accessions=["GSE999001"]), cache_dir=cache_with_soft)
     by_id = {s.sample_id: s for s in partial.samples}
     files = by_id["GSM999001"].files
     assert files is not None
     vals = files.value
-    assert any("GSM999001_HN01_Tumor_matrix.mtx.gz" in u for u in vals)
-    assert any("GSM999001_HN01_Tumor_barcodes.tsv.gz" in u for u in vals)
-    assert any("GSM999001_HN01_Tumor_features.tsv.gz" in u for u in vals)
     assert len(vals) == 3
+    for rel in vals:
+        assert rel.startswith("GSM999001/"), f"files must be under <sample_id>/ ({rel})"
+        assert "://" not in rel, f"files must be local paths, not URLs ({rel})"
+
+
+def test_extract_populates_url_map_with_source_urls(cache_with_soft: Path):
+    """partial.url_map[sample_id] carries the SOFT supplementary URLs that
+    modes.run will download. Lines up 1:1 with sample.files order."""
+    partial = _ex().extract(Source(accessions=["GSE999001"]), cache_dir=cache_with_soft)
+    urls = partial.url_map.get("GSM999001")
+    assert urls is not None
+    assert len(urls) == 3
+    for u in urls:
+        assert u.startswith(("http://", "https://", "ftp://")), f"url_map must hold URLs ({u})"
+    # Order and basename alignment.
+    by_id = {s.sample_id: s for s in partial.samples}
+    rel = by_id["GSM999001"].files.value
+    for r, u in zip(rel, urls):
+        assert u.endswith(r.split("/", 1)[1]), f"{u} does not end with basename of {r}"
 
 
 # -------- characteristics → extra (verbatim, no canonical promotion) --------

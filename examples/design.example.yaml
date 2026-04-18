@@ -42,6 +42,6 @@ contrasts:
 batches: [donor_id]
 
 extraction:
-  methods: [geo-soft, llm-paper]
+  methods: [geo-soft, manual]
   extracted_at: 2026-04-17T00:00:00Z
   notes: per-field attribution (model, confidence, source file) in provenance.json

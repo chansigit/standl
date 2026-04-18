@@ -18,9 +18,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-paper = ["pypdf>=4.0", "lxml>=4.9"]
-geo = ["GEOparse>=2.0"]
-test = ["pytest>=7.0"]
+# Used by validate / meta-check when a processed h5ad is passed.
+h5ad = ["anndata>=0.10"]
+test = ["pytest>=7.0", "anndata>=0.10"]
 
 [project.scripts]
 standl = "standl.cli:main"

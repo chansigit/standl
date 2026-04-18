@@ -169,18 +169,24 @@ def test_meta_check_runs_without_existing_design_yaml(tmp_path: Path, make_h5ad)
 
 # -------- paper extractor best-effort --------
 
-def test_meta_check_records_unimplemented_paper_extractors(good: Path, tmp_path: Path, make_h5ad):
-    """Extractors still stubbed (NotImplementedError) must surface as a warn,
-    never crash the run. ``llm-paper`` is still a stub as of step 3, so a DOI
-    source triggers it and exercises the raise → warn path."""
+def test_meta_check_records_raising_extractor_as_warn(
+    good: Path, tmp_path: Path, make_h5ad, monkeypatch,
+):
+    """An extractor that raises must surface as a ``paper_extractor_skipped``
+    warn — not crash the run. Simulated by monkeypatching geo-soft to raise."""
     pytest.importorskip("anndata")
     from standl.modes import meta_check
     from standl.schema import Source
-    h5ad = make_h5ad(tmp_path / "data.h5ad", ["HN01_Tumor", "HN01_PBL"])
+    from standl.extractors.geo_soft import GEOSoftExtractor
 
-    report = meta_check(good, h5ad=h5ad, paper_source=Source(paper_doi="10.1234/stubbed"))
+    def boom(self, source, cache_dir):
+        raise RuntimeError("simulated extractor crash")
+    monkeypatch.setattr(GEOSoftExtractor, "extract", boom)
+
+    h5ad = make_h5ad(tmp_path / "data.h5ad", ["HN01_Tumor", "HN01_PBL"])
+    report = meta_check(good, h5ad=h5ad, paper_source=Source(accessions=["GSE111111"]))
     assert any(
-        r.check == "paper_extractor_skipped" and "llm-paper" in r.message
+        r.check == "paper_extractor_skipped" and "geo-soft" in r.message
         for r in report.records
     )
 

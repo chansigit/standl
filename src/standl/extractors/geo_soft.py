@@ -9,9 +9,10 @@ and superseries vs series layout have all drifted. This extractor follows a
   implemented here; the other fallbacks are hooks for follow-up work.*
 - Only emit fields from the canonical schema. Raw oddities go into
   ``Sample.extra`` verbatim — never invent new top-level fields.
-- Don't guess condition/batch from characteristics free-text. That's the
-  LLM extractor's job. This extractor's value is *deterministic, verifiable
-  facts*: accessions, titles, characteristics key/value pairs as-given.
+- Don't guess condition/batch from characteristics free-text. That is a
+  human-in-the-loop step (see ``skills/standl/SKILL.md``). This extractor's
+  value is *deterministic, verifiable facts*: accessions, titles,
+  characteristics key/value pairs as-given.
 
 When a field is missing (source changed, key renamed), record ``(field, reason)``
 in ``PartialDesign.failures`` and move on. Never raise for format drift.
@@ -213,8 +214,9 @@ def _build_partial(parsed: _Parsed, dataset_id: str) -> PartialDesign:
             assay_pv = _pv(title, "Platform_title", confidence=0.6)
             break
 
-    # Samples.
+    # Samples + url_map.
     samples: list[PartialSample] = []
+    url_map: dict[str, list[str]] = {}
     for gsm, attrs in parsed.samples.items():
         sample = PartialSample(sample_id=gsm)
 
@@ -224,26 +226,30 @@ def _build_partial(parsed: _Parsed, dataset_id: str) -> PartialDesign:
         if org:
             sample.organism = _pv(org, "Sample_organism_ch1")
 
-        files = list(attrs.get("Sample_supplementary_file_1", []))
-        for i in range(2, 32):  # up to 31 supplementary files
+        # Collect source URLs in order; prefer numbered attributes 1..31.
+        urls: list[str] = []
+        for i in range(1, 32):
             key = f"Sample_supplementary_file_{i}"
-            if key not in attrs:
-                continue
-            files.extend(attrs[key])
-        # Fall back to any numbered supplementary_file_* key (order-preserving).
-        if not files:
-            supp_keys = sorted(
-                k for k in attrs if k.startswith("Sample_supplementary_file")
-            )
-            for k in supp_keys:
-                files.extend(attrs[k])
-        if files:
+            urls.extend(attrs.get(key, []))
+        # Pick up any remaining Sample_supplementary_file_* variants we didn't
+        # cover (e.g. non-numbered), preserving SOFT order.
+        numbered_keys = {f"Sample_supplementary_file_{i}" for i in range(1, 32)}
+        for k in sorted(attrs):
+            if k.startswith("Sample_supplementary_file") and k not in numbered_keys:
+                urls.extend(attrs[k])
+
+        if urls:
+            # sample.files is the local relative path under raw/; url_map
+            # carries the remote URLs. modes.run downloads url_map[sid][i]
+            # to raw/<sid>/<basename(urls[i])>, which lines up with sample.files.
+            rel = [f"{gsm}/{u.rsplit('/', 1)[-1]}" for u in urls]
             sample.files = ProvenancedValue(
-                value=files,
+                value=rel,
                 source="geo-soft",
                 confidence=0.95,
                 evidence="Sample_supplementary_file_*",
             )
+            url_map[gsm] = urls
 
         # Characteristics → extra verbatim. No canonical promotion.
         sample.extra.update(_extract_characteristics(attrs))
@@ -272,6 +278,7 @@ def _build_partial(parsed: _Parsed, dataset_id: str) -> PartialDesign:
         organism=organism_pv,
         assay=assay_pv,
         samples=samples,
+        url_map=url_map,
         failures=failures,
         notes=_first(series.get("Series_title")),
     )

@@ -6,6 +6,10 @@ active venv already owns a top-level ``tests`` package — a direct
 """
 from __future__ import annotations
 
+import http.server
+import socketserver
+import threading
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
@@ -49,3 +53,47 @@ def _make_h5ad(
 @pytest.fixture
 def make_h5ad() -> Callable[..., Path]:
     return _make_h5ad
+
+
+# -------- tiny local HTTP server for fetch / run tests --------
+
+class _SilentHandler(http.server.SimpleHTTPRequestHandler):
+    def __init__(self, *args: Any, directory: str, **kwargs: Any) -> None:
+        super().__init__(*args, directory=directory, **kwargs)
+
+    def log_message(self, format: str, *args: Any) -> None:  # noqa: A002
+        return  # suppress pytest noise
+
+
+@dataclass
+class LocalServer:
+    url: str
+    root: Path
+    _server: socketserver.TCPServer
+
+    def shutdown(self) -> None:
+        self._server.shutdown()
+
+
+@pytest.fixture
+def http_server(tmp_path: Path):
+    """Spin up ``http.server`` on a random port serving a tmp subdirectory.
+
+    Use ``server.root`` to drop files and ``server.url`` to fetch them.
+    """
+    root = tmp_path / "serve"
+    root.mkdir()
+
+    def factory(*args: Any, **kwargs: Any) -> _SilentHandler:
+        return _SilentHandler(*args, directory=str(root), **kwargs)
+
+    srv = socketserver.TCPServer(("127.0.0.1", 0), factory)
+    port = srv.server_address[1]
+    thread = threading.Thread(target=srv.serve_forever, daemon=True)
+    thread.start()
+
+    local = LocalServer(url=f"http://127.0.0.1:{port}", root=root, _server=srv)
+    try:
+        yield local
+    finally:
+        local.shutdown()

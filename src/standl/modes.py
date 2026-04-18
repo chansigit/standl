@@ -19,16 +19,23 @@ from typing import Any
 
 import yaml
 
+from datetime import datetime, timezone
+
 from .audit import AuditRecord, AuditReport, Severity, render_markdown
 from .merge import merge
 from .schema import (
     Design,
     Manifest,
+    ManifestEntry,
     PartialDesign,
     PartialSample,
     ProvenancedValue,
     Source,
 )
+
+
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 # ---------- constants ----------
@@ -391,10 +398,132 @@ def validate(
     return report
 
 
-def run(source: Source, out_dir: Path) -> None:
-    """Full: extract design → fetch raw/ → validate → audit.md."""
-    # TODO(step 5): extract + fetch + validate glue. See docs/roadmap.md.
-    raise NotImplementedError
+def _write_design_yaml(out_dir: Path, design: Design) -> None:
+    (out_dir / "design.yaml").write_text(
+        yaml.safe_dump(
+            design.model_dump(mode="json", exclude_none=True),
+            sort_keys=False,
+        )
+    )
+
+
+def _write_provenance_json(out_dir: Path, provenance) -> None:
+    (out_dir / "provenance.json").write_text(
+        json.dumps(
+            provenance.model_dump(mode="json", exclude_none=True),
+            indent=2,
+        ) + "\n"
+    )
+
+
+def _write_manifest_json(out_dir: Path, manifest: Manifest) -> None:
+    (out_dir / "manifest.json").write_text(
+        json.dumps(
+            manifest.model_dump(mode="json", exclude_none=True),
+            indent=2,
+        ) + "\n"
+    )
+
+
+def _union_url_map(partials: list[PartialDesign]) -> dict[str, list[str]]:
+    """Union url_maps from all partials, preserving order within each list."""
+    merged: dict[str, list[str]] = {}
+    for p in partials:
+        for sid, urls in p.url_map.items():
+            existing = merged.setdefault(sid, [])
+            for u in urls:
+                if u not in existing:
+                    existing.append(u)
+    return merged
+
+
+def run(source: Source, out_dir: Path) -> AuditReport:
+    """Full pipeline: extract design → fetch raw/ → validate → audit.md.
+
+    1. ``pick_extractors(source)`` — run each (NOT h5ad-observed; there's no
+       local h5ad yet), collect PartialDesigns. Raises/NotImplementedError
+       from an extractor are caught and recorded as a partial with failures.
+    2. ``merge()`` — produce one Design + ProvenanceRecord.
+    3. Build ``manifest.json`` from the union of per-extractor ``url_map``
+       entries, zipped with ``sample.files`` (which carry the predictable
+       ``<sample_id>/<basename>`` relative paths).
+    4. ``fetch.download`` each entry; update status + sha256 + size in place.
+    5. Write design.yaml, provenance.json, manifest.json.
+    6. Call ``validate`` to produce audit.md and return the AuditReport.
+    """
+    from .extractors import pick_extractors
+    from .fetch import download
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    paper_cache = out_dir / "paper"
+    paper_cache.mkdir(parents=True, exist_ok=True)
+    raw_dir = out_dir / "raw"
+    raw_dir.mkdir(parents=True, exist_ok=True)
+
+    partials: list[PartialDesign] = []
+    for ex, _score in pick_extractors(source):
+        if ex.name == "h5ad-observed":
+            continue  # not applicable at run-time — needs a processed h5ad
+        try:
+            partials.append(ex.extract(source, cache_dir=paper_cache))
+        except NotImplementedError as e:
+            partials.append(PartialDesign(
+                extractor=ex.name,
+                failures={"extract": f"not yet implemented: {e}"},
+            ))
+        except Exception as e:  # noqa: BLE001
+            partials.append(PartialDesign(
+                extractor=ex.name,
+                failures={"extract": f"{type(e).__name__}: {e}"},
+            ))
+
+    if not partials:
+        raise ValueError(
+            f"no extractors can handle source {source.model_dump(exclude_none=True)}"
+        )
+
+    if not any(p.dataset_id for p in partials):
+        partials[0].dataset_id = out_dir.name
+
+    merged_design, provenance = merge(partials)
+    url_map = _union_url_map(partials)
+
+    manifest_entries: list[ManifestEntry] = []
+    for s in merged_design.samples:
+        files = list(s.files or [])
+        urls = url_map.get(s.sample_id, [])
+        # Pair files (relative paths) with their source URLs. Extractors emit
+        # aligned lists; shorter of the two wins if they drift.
+        for rel, url in zip(files, urls):
+            manifest_entries.append(ManifestEntry(
+                path=rel,
+                url=url,
+                status="pending",
+                source_accession=s.accession,
+            ))
+
+    manifest = Manifest(
+        dataset_id=merged_design.dataset_id,
+        entries=manifest_entries,
+        created_at=_now(),
+    )
+
+    for entry in manifest.entries:
+        dest = raw_dir / entry.path
+        try:
+            result = download(entry.url, dest)
+            entry.size_bytes = result.size_bytes
+            entry.sha256 = result.sha256
+            entry.status = "ok"
+            entry.downloaded_at = _now()
+        except Exception:  # noqa: BLE001 — record the failure, keep going
+            entry.status = "missing"
+
+    _write_design_yaml(out_dir, merged_design)
+    _write_provenance_json(out_dir, provenance)
+    _write_manifest_json(out_dir, manifest)
+
+    return validate(out_dir)
 
 
 def _design_to_partial(

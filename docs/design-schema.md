@@ -77,7 +77,7 @@ attribution (model, confidence, evidence pointer, conflicts) lives in the
 
 | field | notes |
 |---|---|
-| `methods` | list of extractor names that ran, e.g. `[geo-soft, llm-paper]` |
+| `methods` | list of extractor names that ran, e.g. `[geo-soft, manual]` |
 | `extracted_at` | ISO timestamp |
 | `notes` | optional free-form caveats |
 
