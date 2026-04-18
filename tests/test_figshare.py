@@ -131,3 +131,16 @@ def test_extract_records_failure_on_empty_files(monkeypatch, tmp_path: Path):
         Source(paper_doi=f"10.6084/m9.figshare.{ARTICLE_ID}"), cache_dir=tmp_path,
     )
     assert "files" in partial.failures
+
+
+def test_extract_populates_file_meta_md5_and_size(monkeypatch, tmp_path: Path):
+    """Figshare uses ``computed_md5``; file_meta picks it up raw (no prefix)."""
+    from standl.extractors import figshare as fs
+    monkeypatch.setattr(fs, "_fetch_article", lambda article_id, cache_dir: FAKE_ARTICLE)
+
+    partial = _ex().extract(
+        Source(paper_doi=f"10.6084/m9.figshare.{ARTICLE_ID}"), cache_dir=tmp_path,
+    )
+    metas = partial.file_meta[ARTICLE_ID]
+    assert metas[0]["md5"] == "70a6069ea111124793033667a08298f9"
+    assert metas[0]["size_bytes"] == 1_018_464_348

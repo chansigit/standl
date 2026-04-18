@@ -437,7 +437,59 @@ def _union_url_map(partials: list[PartialDesign]) -> dict[str, list[str]]:
     return merged
 
 
-def run(source: Source, out_dir: Path) -> AuditReport:
+def _collect_file_meta(partials: list[PartialDesign]) -> dict[str, dict[str, dict]]:
+    """Fold each partial's ``file_meta`` into a lookup ``sid -> url -> meta``.
+
+    ``PartialDesign.file_meta`` is positional (parallel to ``url_map``). Folding
+    to a URL-keyed dict makes it trivial to stamp ``ManifestEntry`` after the
+    url_map has been unioned — entries keep their source-API checksum even when
+    multiple extractors contributed.
+    """
+    out: dict[str, dict[str, dict]] = {}
+    for p in partials:
+        for sid, metas in p.file_meta.items():
+            urls = p.url_map.get(sid, [])
+            if len(metas) != len(urls):
+                # Positional misalignment → skip the broken entry but keep
+                # whatever we already collected. Defensive against future
+                # extractor bugs; never the happy path.
+                continue
+            bucket = out.setdefault(sid, {})
+            for url, meta in zip(urls, metas):
+                if meta and url not in bucket:
+                    bucket[url] = dict(meta)
+    return out
+
+
+_EXTRACTOR_CACHE_GLOBS = (
+    "*_family.soft", "*_family.soft.gz",
+    "cellxgene_datasets_index.json",
+    "hca_project_*.json",
+    "zenodo_*.json",
+    "figshare_*.json",
+    "biostudies_*.json",
+)
+
+
+def _clear_extractor_caches(paper_cache: Path) -> int:
+    """Delete known per-extractor cache files under ``paper_cache``. Returns
+    how many files were removed. Leaves anything else alone (skill-flow
+    PDFs, hand-stashed supplementary tables, etc.).
+    """
+    if not paper_cache.exists():
+        return 0
+    removed = 0
+    for pattern in _EXTRACTOR_CACHE_GLOBS:
+        for p in paper_cache.glob(pattern):
+            try:
+                p.unlink()
+                removed += 1
+            except OSError:
+                pass
+    return removed
+
+
+def run(source: Source, out_dir: Path, *, refresh: bool = False) -> AuditReport:
     """Full pipeline: extract design → fetch raw/ → validate → audit.md.
 
     1. ``pick_extractors(source)`` — run each (NOT h5ad-observed; there's no
@@ -457,6 +509,8 @@ def run(source: Source, out_dir: Path) -> AuditReport:
     out_dir.mkdir(parents=True, exist_ok=True)
     paper_cache = out_dir / "paper"
     paper_cache.mkdir(parents=True, exist_ok=True)
+    if refresh:
+        _clear_extractor_caches(paper_cache)
     raw_dir = out_dir / "raw"
     raw_dir.mkdir(parents=True, exist_ok=True)
 
@@ -487,19 +541,25 @@ def run(source: Source, out_dir: Path) -> AuditReport:
 
     merged_design, provenance = merge(partials)
     url_map = _union_url_map(partials)
+    meta_lookup = _collect_file_meta(partials)
 
     manifest_entries: list[ManifestEntry] = []
     for s in merged_design.samples:
         files = list(s.files or [])
         urls = url_map.get(s.sample_id, [])
+        per_sample_meta = meta_lookup.get(s.sample_id, {})
         # Pair files (relative paths) with their source URLs. Extractors emit
         # aligned lists; shorter of the two wins if they drift.
         for rel, url in zip(files, urls):
+            meta = per_sample_meta.get(url, {})
             manifest_entries.append(ManifestEntry(
                 path=rel,
                 url=url,
                 status="pending",
                 source_accession=s.accession,
+                md5=meta.get("md5"),
+                sha256=meta.get("sha256"),
+                size_bytes=meta.get("size_bytes"),
             ))
 
     manifest = Manifest(
@@ -511,7 +571,10 @@ def run(source: Source, out_dir: Path) -> AuditReport:
     for entry in manifest.entries:
         dest = raw_dir / entry.path
         try:
-            result = download(entry.url, dest)
+            # Pass the API-asserted sha256 through to fetch so it verifies on
+            # download. md5 from the API is carried as informational — fetch
+            # doesn't verify it (we only compute sha256 during streaming).
+            result = download(entry.url, dest, sha256=entry.sha256)
             entry.size_bytes = result.size_bytes
             entry.sha256 = result.sha256
             entry.status = "ok"
@@ -599,6 +662,7 @@ def meta_check(
     write_design: bool = False,
     expected_cell_count: int | None = None,
     cell_count_tolerance: float = 0.1,
+    refresh: bool = False,
 ) -> AuditReport:
     """Data already processed; only verify metadata claims. Read-only by default.
 
@@ -617,6 +681,9 @@ def meta_check(
     ``write_design=True`` is passed explicitly.
     """
     from .extractors import all_extractors, pick_extractors
+
+    if refresh:
+        _clear_extractor_caches(dataset_dir)
 
     partials: list[PartialDesign] = []
     paper_failures: list[tuple[str, str]] = []

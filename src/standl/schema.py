@@ -138,6 +138,14 @@ class PartialDesign(BaseModel):
     # to drive manifest.json + downloads. Sample.files carries the downloaded
     # relative paths; url_map carries the remote URLs in parallel.
     url_map: dict[str, list[str]] = Field(default_factory=dict)
+    # sample_id -> parallel list to url_map, each entry a dict carrying any
+    # of ``md5`` / ``sha256`` / ``size_bytes`` the source API supplied.
+    # Extractors populate what they have; modes.run stamps these onto the
+    # corresponding ManifestEntry before download so the recorded manifest
+    # carries the upstream-asserted checksum alongside the locally-computed
+    # one. Left empty for extractors whose APIs don't expose checksums
+    # (geo-soft). Positional alignment with url_map is REQUIRED.
+    file_meta: dict[str, list[dict[str, Any]]] = Field(default_factory=dict)
     # Fields we tried but couldn't fill — "source changed format" etc.
     failures: dict[str, str] = Field(default_factory=dict)
 

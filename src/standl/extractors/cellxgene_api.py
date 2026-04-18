@@ -225,6 +225,7 @@ def _build_partial(record: dict[str, Any], dataset_id: str) -> PartialDesign:
     assets = record.get("assets", []) or []
     h5ad_url = _pick_h5ad_asset(assets)
     url_map: dict[str, list[str]] = {}
+    file_meta: dict[str, list[dict]] = {}
     if h5ad_url:
         basename = h5ad_url.rsplit("/", 1)[-1] or f"{dataset_id}.h5ad"
         sample.files = ProvenancedValue(
@@ -234,6 +235,14 @@ def _build_partial(record: dict[str, Any], dataset_id: str) -> PartialDesign:
             evidence="assets[*].url (H5AD/RAW_H5AD)",
         )
         url_map[dataset_id] = [h5ad_url]
+        # Pull filesize from the asset that matched the chosen URL.
+        asset = next(
+            (a for a in assets if a.get("url") == h5ad_url), None,
+        )
+        meta: dict = {}
+        if asset and (sz := asset.get("filesize")) is not None:
+            meta["size_bytes"] = int(sz)
+        file_meta[dataset_id] = [meta]
     else:
         failures["assets"] = "no H5AD/RAW_H5AD asset in dataset record"
 
@@ -255,6 +264,7 @@ def _build_partial(record: dict[str, Any], dataset_id: str) -> PartialDesign:
         assay=assay_pv,
         samples=[sample],
         url_map=url_map,
+        file_meta=file_meta,
         failures=failures,
         notes=" | ".join(notes_parts) or None,
     )

@@ -228,13 +228,23 @@ def _build_partial(
         )
 
     url_map: dict[str, list[str]] = {}
+    file_meta: dict[str, list[dict]] = {}
     if processed_entries:
         rel_paths: list[str] = []
         urls: list[str] = []
+        metas: list[dict] = []
         for f in processed_entries:
             path = f.get("path") or f.get("Name")
             rel_paths.append(f"{accession}/{path}")
             urls.append(f"{FILES_BASE}/{accession}/{path}")
+            # BioStudies exposes size but no checksum on /api/v1/files.
+            meta: dict = {}
+            if (sz := f.get("size")) is not None:
+                try:
+                    meta["size_bytes"] = int(sz)
+                except (TypeError, ValueError):
+                    pass
+            metas.append(meta)
         sample.files = ProvenancedValue(
             value=rel_paths,
             source="biostudies",
@@ -242,6 +252,7 @@ def _build_partial(
             evidence="files.data[*].path (raw formats filtered)",
         )
         url_map[accession] = urls
+        file_meta[accession] = metas
     elif all_data:
         failures["data_format"] = (
             f"only raw-sequencing formats available ({raw_count} fastq/bam/sra file(s)); "
@@ -264,6 +275,7 @@ def _build_partial(
         assay=assay_pv,
         samples=[sample],
         url_map=url_map,
+        file_meta=file_meta,
         failures=failures,
         notes=str(title) if title else None,
     )

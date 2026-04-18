@@ -132,3 +132,18 @@ def test_extract_records_failure_on_empty_file_list(monkeypatch, tmp_path: Path)
     partial = _ex().extract(Source(paper_doi=f"10.5281/zenodo.{RECORD_ID}"), cache_dir=tmp_path)
     assert partial.url_map == {}
     assert "files" in partial.failures
+
+
+def test_extract_populates_file_meta_md5_and_size(monkeypatch, tmp_path: Path):
+    """Zenodo gives checksum as ``md5:<hex>`` + size — strip the prefix, pass
+    both through in file_meta positionally aligned with url_map."""
+    from standl.extractors import zenodo as zen
+    monkeypatch.setattr(zen, "_fetch_record", lambda record_id, cache_dir: FAKE_RECORD)
+
+    partial = _ex().extract(Source(paper_doi=f"10.5281/zenodo.{RECORD_ID}"), cache_dir=tmp_path)
+    metas = partial.file_meta[RECORD_ID]
+    urls = partial.url_map[RECORD_ID]
+    assert len(metas) == len(urls) == 2
+    assert metas[0]["md5"] == "9f5ca452848f82bb02e813f6f5abcdef"
+    assert "md5:" not in metas[0]["md5"]  # algorithm prefix stripped
+    assert metas[0]["size_bytes"] == 115_000_000

@@ -137,9 +137,11 @@ def _build_partial(
 
     files = record.get("files") or []
     url_map: dict[str, list[str]] = {}
+    file_meta: dict[str, list[dict]] = {}
     if files:
         rel_paths: list[str] = []
         urls: list[str] = []
+        metas: list[dict] = []
         for f in files:
             if not isinstance(f, dict):
                 continue
@@ -149,6 +151,12 @@ def _build_partial(
                 continue
             rel_paths.append(f"{article_id}/{name}")
             urls.append(str(dlurl))
+            meta: dict = {}
+            if (md5 := f.get("computed_md5") or f.get("md5")):
+                meta["md5"] = str(md5)
+            if (sz := f.get("size")) is not None:
+                meta["size_bytes"] = int(sz)
+            metas.append(meta)
         if rel_paths:
             sample.files = ProvenancedValue(
                 value=rel_paths,
@@ -157,6 +165,7 @@ def _build_partial(
                 evidence="files[*].download_url",
             )
             url_map[article_id] = urls
+            file_meta[article_id] = metas
         else:
             failures["files"] = "figshare article has no resolvable download URLs"
     else:
@@ -178,6 +187,7 @@ def _build_partial(
         ),
         samples=[sample],
         url_map=url_map,
+        file_meta=file_meta,
         failures=failures,
         notes=notes,
     )

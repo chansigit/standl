@@ -207,9 +207,11 @@ def _build_partial(record: dict[str, Any], uuid: str) -> PartialDesign:
     ]
 
     url_map: dict[str, list[str]] = {}
+    file_meta: dict[str, list[dict]] = {}
     if matrices:
         rel_paths: list[str] = []
         urls: list[str] = []
+        metas: list[dict] = []
         for m in matrices:
             file_uuid = m["uuid"]
             file_version = m.get("version", "")
@@ -219,6 +221,13 @@ def _build_partial(record: dict[str, Any], uuid: str) -> PartialDesign:
                 qs += f"&version={file_version}"
             rel_paths.append(f"{uuid}/{file_name}")
             urls.append(f"{API_BASE}/fetch/repository/files/{file_uuid}?{qs}")
+            meta: dict = {}
+            # Azul exposes sha256 directly on matrix file records.
+            if (sha := m.get("sha256")):
+                meta["sha256"] = str(sha)
+            if (sz := m.get("size")) is not None:
+                meta["size_bytes"] = int(sz)
+            metas.append(meta)
         sample.files = ProvenancedValue(
             value=rel_paths,
             source="hca-dcp",
@@ -226,6 +235,7 @@ def _build_partial(record: dict[str, Any], uuid: str) -> PartialDesign:
             evidence="contributedAnalyses.*.uuid (Matrix, !isIntermediate)",
         )
         url_map[uuid] = urls
+        file_meta[uuid] = metas
     else:
         failures["matrices"] = "no non-intermediate Matrix entry under contributedAnalyses"
 
@@ -257,6 +267,7 @@ def _build_partial(record: dict[str, Any], uuid: str) -> PartialDesign:
         assay=assay_pv,
         samples=[sample],
         url_map=url_map,
+        file_meta=file_meta,
         failures=failures,
         notes=" | ".join(notes_parts) or None,
     )

@@ -200,3 +200,17 @@ def test_extract_records_failure_when_no_dataset_id_extractable(tmp_path: Path):
         cache_dir=tmp_path,
     )
     assert partial.failures
+
+
+def test_extract_populates_file_meta_size_from_filesize(monkeypatch, tmp_path: Path):
+    """CxG exposes `filesize` on each asset but no checksum — plumb size only."""
+    from standl.extractors import cellxgene_api as cxg
+    monkeypatch.setattr(cxg, "_fetch_datasets_list", lambda cache_dir: [FAKE_DATASET])
+
+    partial = _ex().extract(
+        Source(paper_url=f"https://cellxgene.cziscience.com/e/{UUID}.cxg/"),
+        cache_dir=tmp_path,
+    )
+    metas = partial.file_meta[UUID]
+    assert metas[0]["size_bytes"] == 421889692
+    assert "md5" not in metas[0]

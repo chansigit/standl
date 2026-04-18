@@ -135,9 +135,11 @@ def _build_partial(record: dict[str, Any], record_id: str) -> PartialDesign:
 
     files = record.get("files") or []
     url_map: dict[str, list[str]] = {}
+    file_meta: dict[str, list[dict]] = {}
     if files:
         rel_paths: list[str] = []
         urls: list[str] = []
+        metas: list[dict] = []
         for f in files:
             if not isinstance(f, dict):
                 continue
@@ -147,6 +149,15 @@ def _build_partial(record: dict[str, Any], record_id: str) -> PartialDesign:
                 continue
             rel_paths.append(f"{record_id}/{name}")
             urls.append(str(link))
+            meta: dict = {}
+            # Zenodo prefixes checksum with the algorithm, e.g. "md5:<hex>".
+            if (cs := f.get("checksum")) and isinstance(cs, str) and ":" in cs:
+                algo, _, digest = cs.partition(":")
+                if algo.lower() == "md5" and digest:
+                    meta["md5"] = digest
+            if (sz := f.get("size")) is not None:
+                meta["size_bytes"] = int(sz)
+            metas.append(meta)
         if rel_paths:
             sample.files = ProvenancedValue(
                 value=rel_paths,
@@ -155,6 +166,7 @@ def _build_partial(record: dict[str, Any], record_id: str) -> PartialDesign:
                 evidence="files[*].links.self",
             )
             url_map[record_id] = urls
+            file_meta[record_id] = metas
         else:
             failures["files"] = "zenodo record has no resolvable file URLs"
     else:
@@ -172,6 +184,7 @@ def _build_partial(record: dict[str, Any], record_id: str) -> PartialDesign:
         ),
         samples=[sample],
         url_map=url_map,
+        file_meta=file_meta,
         failures=failures,
         notes=notes,
     )

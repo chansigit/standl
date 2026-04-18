@@ -183,3 +183,20 @@ def test_extract_records_failure_on_empty_files(monkeypatch, tmp_path: Path):
 
     partial = _ex().extract(Source(accessions=[ACC]), cache_dir=tmp_path)
     assert partial.failures
+
+
+def test_extract_populates_file_meta_size_only(monkeypatch, tmp_path: Path):
+    """BioStudies /files endpoint exposes size but not md5/sha256 — file_meta
+    should carry size_bytes and omit the rest."""
+    from standl.extractors import biostudies as bs
+    monkeypatch.setattr(bs, "_fetch_study", lambda acc, cache_dir: FAKE_STUDY)
+    monkeypatch.setattr(bs, "_fetch_files", lambda acc, cache_dir: FAKE_FILES)
+
+    partial = _ex().extract(Source(accessions=[ACC]), cache_dir=tmp_path)
+    metas = partial.file_meta[ACC]
+    # Only processed entries (2: h5ad + samples.tsv) survived the raw filter.
+    assert len(metas) == 2
+    for m in metas:
+        assert "size_bytes" in m
+        assert "md5" not in m
+        assert "sha256" not in m

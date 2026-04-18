@@ -86,6 +86,8 @@ def main(argv: list[str] | None = None) -> int:
     p_run = sub.add_parser("run", help="Full: extract + fetch + validate")
     p_run.add_argument("source", help="DOI, URL, or accession (e.g. GSE123456)")
     p_run.add_argument("-o", "--out", required=True, type=Path)
+    p_run.add_argument("--refresh", action="store_true",
+                       help="invalidate cached SOFT / API responses under <out>/paper/ before extracting")
 
     p_val = sub.add_parser("validate", help="Reconcile local data with design.yaml")
     p_val.add_argument("dataset_dir", type=Path)
@@ -102,11 +104,13 @@ def main(argv: list[str] | None = None) -> int:
                         help="Processed h5ad to cross-check against design")
     p_meta.add_argument("--write-design", action="store_true",
                         help="Overwrite design.yaml + write provenance.json (default: read-only)")
+    p_meta.add_argument("--refresh", action="store_true",
+                        help="invalidate cached SOFT / API responses under <dataset_dir>/ before re-extracting")
 
     args = parser.parse_args(argv)
 
     if args.cmd == "run":
-        report = modes.run(_source_from_string(args.source), args.out)
+        report = modes.run(_source_from_string(args.source), args.out, refresh=args.refresh)
         hints: list[str] = []
         if _design_needs_hand_edit(args.out):
             hints.append(
@@ -124,6 +128,7 @@ def main(argv: list[str] | None = None) -> int:
             paper_source=paper_src,
             h5ad=args.h5ad,
             write_design=args.write_design,
+            refresh=args.refresh,
         )
         _print_summary(args.dataset_dir, report, mode="meta-check")
     else:

@@ -181,6 +181,86 @@ def test_run_elevates_data_layout_failure_to_fail(http_server, tmp_path: Path):
     assert data_layout_records[0].status == "fail"
 
 
+def test_run_plumbs_file_meta_into_manifest_entries(http_server, tmp_path: Path, monkeypatch):
+    """If an extractor publishes file_meta, ManifestEntry.md5 / size_bytes /
+    sha256 should be stamped from it when pre-download. Fake it on geo-soft's
+    partial via monkeypatching extract."""
+    from standl.modes import run
+    from standl.schema import Source, PartialDesign, PartialSample, ProvenancedValue
+    from standl.extractors.geo_soft import GEOSoftExtractor
+
+    _populate_server(http_server.root)
+
+    def fake_extract(self, source, cache_dir):
+        sid = "GSM999001"
+        rel = f"{sid}/GSM999001_HN01_Tumor_matrix.mtx.gz"
+        url = f"{http_server.url}/GSM999001_HN01_Tumor_matrix.mtx.gz"
+        return PartialDesign(
+            extractor="geo-soft",
+            dataset_id="GSE999001",
+            source=Source(accessions=["GSE999001"], repositories=["GEO"]),
+            samples=[PartialSample(
+                sample_id=sid,
+                files=ProvenancedValue(value=[rel], source="geo-soft", confidence=0.95),
+            )],
+            url_map={sid: [url]},
+            file_meta={sid: [{"md5": "cafebabe" * 4, "size_bytes": 20}]},
+        )
+    monkeypatch.setattr(GEOSoftExtractor, "extract", fake_extract)
+
+    out_dir = tmp_path / "ds"
+    run(Source(accessions=["GSE999001"]), out_dir)
+
+    import json
+    m = json.loads((out_dir / "manifest.json").read_text())
+    entry = m["entries"][0]
+    assert entry["md5"] == "cafebabe" * 4
+    # size_bytes ends up as the ACTUAL downloaded size (post-download overwrite),
+    # but pre-download it was the API's 20 — we can at least check it's non-None.
+    assert entry["size_bytes"] is not None
+    # sha256 is computed during download and overwrites the (unset) extractor value.
+    assert entry["sha256"] is not None and len(entry["sha256"]) == 64
+
+
+def test_run_refresh_wipes_extractor_caches(http_server, tmp_path: Path, monkeypatch):
+    """With --refresh (i.e. refresh=True), pre-existing cached SOFT files
+    under <out>/paper/ are removed before extraction runs."""
+    from standl.modes import run
+    from standl.schema import Source
+
+    out_dir = tmp_path / "ds"
+    paper_cache = out_dir / "paper"
+    paper_cache.mkdir(parents=True, exist_ok=True)
+    (paper_cache / "GSE999001_family.soft").write_text("stale marker\n")
+
+    calls: list[str] = []
+
+    def fake_fetch(accession, cache_dir):
+        calls.append(accession)
+        # Write a fresh valid SOFT so extraction succeeds.
+        import shutil as _sh
+        _sh.copy(FIXTURE_SOFT, cache_dir / "GSE999001_family.soft")
+        return cache_dir / "GSE999001_family.soft"
+
+    from standl.extractors import geo_soft as gs
+    monkeypatch.setattr(gs, "_fetch_soft", fake_fetch)
+
+    _populate_server(http_server.root)
+    # Rewrite URLs in the SOFT once we have fresh bytes (fixture URLs point to NCBI).
+    # Easiest: put the server-rewritten SOFT into the cache and assert --refresh
+    # wipes it (then fake_fetch writes the un-rewritten one, downloads fail but
+    # manifest is built — we check cache clearing, not download success).
+    (paper_cache / "GSE999001_family.soft").write_text(_rewrite_soft(http_server.url))
+
+    # Without refresh: cached file is used, fake_fetch not called.
+    run(Source(accessions=["GSE999001"]), out_dir, refresh=False)
+    assert calls == [], "cached SOFT should short-circuit fetch"
+
+    # With refresh: cache is wiped, fake_fetch fires once.
+    run(Source(accessions=["GSE999001"]), out_dir, refresh=True)
+    assert calls == ["GSE999001"], f"expected one fetch after refresh, got {calls}"
+
+
 def test_run_records_extractor_failure_via_partial(monkeypatch, tmp_path: Path, http_server):
     """If an extractor raises mid-run, we collect it as a PartialDesign with
     failures (not crash). Downstream validate still runs; the dataset dir is

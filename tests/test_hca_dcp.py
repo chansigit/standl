@@ -241,3 +241,36 @@ def test_extract_records_failure_on_network_error(monkeypatch, tmp_path: Path):
         Source(accessions=[UUID], repositories=["HCA"]), cache_dir=tmp_path,
     )
     assert partial.failures and "network" in next(iter(partial.failures.values())).lower()
+
+
+def test_extract_populates_file_meta_sha256_and_size(monkeypatch, tmp_path: Path):
+    """Azul gives sha256 + size on matrix files — not md5."""
+    from standl.extractors import hca_dcp as h
+    monkeypatch.setattr(h, "_fetch_project", lambda uuid, cache_dir, catalog=None: FAKE_PROJECT)
+
+    # Extend the fixture's matrix entry with sha256 + size to exercise the plumbing.
+    fake = dict(FAKE_PROJECT)
+    fake_proj = dict(FAKE_PROJECT["projects"][0])
+    fake_ca = {
+        "x": [
+            {
+                "uuid": FILE_UUID,
+                "version": FILE_VERSION,
+                "name": "1M_neurons.h5",
+                "format": "h5",
+                "size": 4216018749,
+                "sha256": "255a36ee92de25cb3568faa2c27d31fe6d0db30f285c5c977be8d6245de14044",
+                "contentDescription": ["Matrix"],
+                "isIntermediate": False,
+                "fileSource": "Contributor",
+            },
+        ],
+    }
+    fake_proj["contributedAnalyses"] = fake_ca
+    fake["projects"] = [fake_proj]
+    monkeypatch.setattr(h, "_fetch_project", lambda uuid, cache_dir, catalog=None: fake)
+
+    partial = _ex().extract(Source(accessions=[UUID], repositories=["HCA"]), cache_dir=tmp_path)
+    metas = partial.file_meta[UUID]
+    assert metas[0]["sha256"].startswith("255a36")
+    assert metas[0]["size_bytes"] == 4216018749
