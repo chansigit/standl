@@ -13,6 +13,7 @@ from . import biostudies  # noqa: F401
 from . import cellxgene_api  # noqa: F401
 from . import figshare  # noqa: F401
 from . import geo_soft  # noqa: F401
+from . import gsa_cncb  # noqa: F401
 from . import h5ad_observed  # noqa: F401
 from . import hca_dcp  # noqa: F401
 from . import sciencedb_cn  # noqa: F401

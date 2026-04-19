@@ -49,6 +49,7 @@ DEFAULT_PRIORITY = {
     "cellxgene-api": 90,
     "hca-dcp": 90,
     "biostudies": 85,
+    "gsa-cncb": 70,
     "zenodo": 60,
     "figshare": 60,
     "sciencedb-cn": 55,
