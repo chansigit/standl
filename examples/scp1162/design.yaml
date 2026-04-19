@@ -1,0 +1,32 @@
+dataset_id: SCP1162
+source:
+  accessions:
+  - SCP1162
+  repositories:
+  - SCP
+organism: Homo sapiens
+assay: 10X 3' v2 sequencing
+samples:
+- sample_id: SCP1162
+  files: []
+  accession: SCP1162
+  organism: Homo sapiens
+  tissue: colon
+  extra:
+    library_prep: 10X 3' v2 sequencing
+    disease: colon adenocarcinoma
+    sex: female
+    cell_count: '371223'
+    title: Human Colon Cancer Atlas (c295)
+    study_url: https://singlecell.broadinstitute.org/single_cell/study/SCP1162/human-colon-cancer-atlas-c295
+factors: []
+contrasts: []
+batches: []
+notes: "Human Colon Cancer Atlas (c295) | Spatially organized multicellular immune\
+  \ hubs in human colorectal cancer\_\_SummaryImmune responses to cancer are highly\
+  \ variable, with mismatch repair-deficient (MMRd) tumors exhibiting more anti-tumor\
+  \ immunity than mismatch repair-proficient (MMRp) tumors."
+extraction:
+  methods:
+  - scp-broad
+  extracted_at: '2026-04-19T05:18:49.858273Z'

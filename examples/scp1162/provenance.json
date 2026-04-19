@@ -1,0 +1,69 @@
+{
+  "dataset_id": "SCP1162",
+  "fields": [
+    {
+      "path": "organism",
+      "chosen": {
+        "value": "Homo sapiens",
+        "source": "scp-broad",
+        "confidence": 0.9,
+        "evidence": "metadata.species[0]"
+      },
+      "rejected": [],
+      "conflict": false
+    },
+    {
+      "path": "assay",
+      "chosen": {
+        "value": "10X 3' v2 sequencing",
+        "source": "scp-broad",
+        "confidence": 0.9,
+        "evidence": "metadata.library_preparation_protocol[0]"
+      },
+      "rejected": [],
+      "conflict": false
+    },
+    {
+      "path": "samples[SCP1162].accession",
+      "chosen": {
+        "value": "SCP1162",
+        "source": "scp-broad",
+        "confidence": 1.0,
+        "evidence": "SCP accession"
+      },
+      "rejected": [],
+      "conflict": false
+    },
+    {
+      "path": "samples[SCP1162].organism",
+      "chosen": {
+        "value": "Homo sapiens",
+        "source": "scp-broad",
+        "confidence": 0.9,
+        "evidence": "metadata.species[0]"
+      },
+      "rejected": [],
+      "conflict": false
+    },
+    {
+      "path": "samples[SCP1162].tissue",
+      "chosen": {
+        "value": "colon",
+        "source": "scp-broad",
+        "confidence": 0.9,
+        "evidence": "metadata.organ[0]"
+      },
+      "rejected": [],
+      "conflict": false
+    }
+  ],
+  "extractor_runs": [
+    {
+      "extractor": "scp-broad",
+      "failures": {
+        "files": "SCP file listing requires bearer token; download files manually via SCP web UI (https://singlecell.broadinstitute.org/single_cell/study/SCP1162/human-colon-cancer-atlas-c295) or Terra"
+      }
+    }
+  ],
+  "created_at": "2026-04-19T05:18:49.858321Z"
+}
