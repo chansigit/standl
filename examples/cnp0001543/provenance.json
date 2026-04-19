@@ -1,0 +1,25 @@
+{
+  "dataset_id": "CNP0001543",
+  "fields": [
+    {
+      "path": "samples[CNP0001543].accession",
+      "chosen": {
+        "value": "CNP0001543",
+        "source": "cngbdb",
+        "confidence": 1.0,
+        "evidence": "cngbdb accession"
+      },
+      "rejected": [],
+      "conflict": false
+    }
+  ],
+  "extractor_runs": [
+    {
+      "extractor": "cngbdb",
+      "failures": {
+        "files": "CNGBdb/CNSA file URLs live under https://ftp.cngb.org/pub/CNSA/data<N>/CNP0001543/ where the data<N> shard (data1..data9) is only exposed via the project page's JavaScript. Browse to https://db.cngb.org/search/project/CNP0001543/ manually to find the shard, then fetch the FTP listing."
+      }
+    }
+  ],
+  "created_at": "2026-04-19T05:18:55.620568Z"
+}

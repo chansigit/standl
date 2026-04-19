@@ -1,0 +1,26 @@
+dataset_id: CNP0001543
+source:
+  accessions:
+  - CNP0001543
+  repositories:
+  - CNGBdb
+organism: ''
+assay: ''
+samples:
+- sample_id: CNP0001543
+  files: []
+  accession: CNP0001543
+  extra:
+    description: Spatially resolved transcriptomic technologies are promising tools
+      to study cell fate decisions in a physical microenvironment, which is fundamental
+      for enhancing our knowledge of mammalian development.
+    ftp_hint: https://ftp.cngb.org/pub/CNSA/
+factors: []
+contrasts: []
+batches: []
+notes: Spatiotemporal transcriptomic atlas of mouse organogenesis using DNA nanoball
+  patterned arrays
+extraction:
+  methods:
+  - cngbdb
+  extracted_at: '2026-04-19T05:18:55.620532Z'
