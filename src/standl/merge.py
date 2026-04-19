@@ -51,6 +51,7 @@ DEFAULT_PRIORITY = {
     "biostudies": 85,
     "zenodo": 60,
     "figshare": 60,
+    "sciencedb-cn": 55,
 }
 
 
