@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/logo.svg" alt="standl" width="420">
+</p>
+
 # standl — Download + Design Extraction for Single-Cell Datasets
 
 The upstream entry point of the `stan*` pipeline. Given a paper URL / DOI / GEO
