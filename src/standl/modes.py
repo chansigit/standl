@@ -44,6 +44,23 @@ _SAFE_ID = re.compile(r"^[A-Za-z0-9_.\-]+$")
 _ONTOLOGY = re.compile(r"^(CL|UBERON|EFO|MONDO|HANCESTRO|HsapDv|PATO):\d+$")
 
 
+def _is_safe_relpath(p: str) -> bool:
+    """Reject absolute paths, parent-dir escapes, null bytes. Paths must
+    resolve *under* raw_dir — extractors from external APIs (BioStudies,
+    GEO, ...) are not trusted to hand us clean paths.
+    """
+    if not p or "\x00" in p:
+        return False
+    if p.startswith("/") or p.startswith("\\"):
+        return False
+    # Normalize separators and reject any component that's .. or absolute-ish.
+    parts = p.replace("\\", "/").split("/")
+    for part in parts:
+        if part in ("..", ""):
+            return False
+    return True
+
+
 def _ok(check: str, msg: str, evidence: dict[str, Any] | None = None) -> AuditRecord:
     return AuditRecord(check=check, status=Severity.OK, message=msg, evidence=evidence)
 
@@ -186,6 +203,15 @@ def _check_sample_id_valid(design: Design) -> list[AuditRecord]:
                 "(allowed: [A-Za-z0-9_.-], no '/' or '..')",
                 {"sample_id": s.sample_id},
             ))
+        for fp in (s.files or []):
+            if not _is_safe_relpath(fp):
+                offense = True
+                recs.append(_fail(
+                    "sample_id_valid",
+                    f"file path {fp!r} on sample {s.sample_id!r} escapes raw/ "
+                    "(absolute, contains '..', or has null bytes)",
+                    {"sample_id": s.sample_id, "path": fp},
+                ))
     if not offense:
         recs.append(_ok("sample_id_valid", f"all {len(design.samples)} sample_ids unique and filesystem-safe"))
     return recs
@@ -593,10 +619,20 @@ def run(source: Source, out_dir: Path, *, refresh: bool = False) -> AuditReport:
     meta_lookup = _collect_file_meta(partials)
 
     manifest_entries: list[ManifestEntry] = []
+    pairing_drift: list[AuditRecord] = []
     for s in merged_design.samples:
         files = list(s.files or [])
         urls = url_map.get(s.sample_id, [])
         per_sample_meta = meta_lookup.get(s.sample_id, {})
+        if len(files) != len(urls):
+            pairing_drift.append(_warn(
+                "files_in_manifest",
+                f"sample {s.sample_id!r}: "
+                f"{len(files)} file entries vs {len(urls)} URLs — "
+                f"pairing truncated to {min(len(files), len(urls))}; "
+                "some entries will be silently dropped from the manifest",
+                {"sample_id": s.sample_id, "n_files": len(files), "n_urls": len(urls)},
+            ))
         # Pair files (relative paths) with their source URLs. Extractors emit
         # aligned lists; shorter of the two wins if they drift.
         for rel, url in zip(files, urls):
@@ -652,6 +688,12 @@ def run(source: Source, out_dir: Path, *, refresh: bool = False) -> AuditReport:
     # write audit.md exactly once — avoids an intermediate file write the
     # caller never sees.
     report = _build_validate_report(out_dir)
+
+    # File/URL count mismatch at manifest-assembly time means an extractor
+    # emitted misaligned lists; silently truncating via ``zip`` would lose
+    # manifest entries with no signal to the user.
+    for rec in pairing_drift:
+        report.add(rec)
 
     # Surface extractor partial failures so conditions like "data is pooled at
     # series level, samples all have supp=NONE" (geo-soft's ``data_layout``)
