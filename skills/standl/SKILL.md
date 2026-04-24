@@ -98,17 +98,96 @@ This replaces the deferred `llm-paper` extractor; it's the same LLM
    `standl meta-check <dir> --h5ad processed.h5ad` surfaces disagreements
    between your `design.yaml` and `obs` in the h5ad.
 
-## Paper-first flow (DOI only, accessions unknown)
+## Paper-first flow (DOI / paper URL; accessions unknown)
 
-If the user hands you a DOI with no GEO accession in the paper:
+When the user hands you a DOI, paper URL, PMC ID, bioRxiv preprint, or any
+other paper-level reference — **do NOT blindly run `standl run <DOI>`**.
+The CLI's programmatic `paper` extractor is weak: it anonymously GETs
+the publisher URL, and most major publishers (Nature, Science, Cell,
+AAAS, Wiley) gate article bodies behind IDP cookie redirects or
+`?error=cookies_not_supported` landing pages, so the body the extractor
+sees contains **no accessions** and the CLI aborts with
+`ValueError: no extractors can handle source {… accessions: [], repositories: []}`.
 
-1. Read the paper first. Look in Methods and Data Availability for the
-   accession (`GSE*`, `PRJNA*`, `E-MTAB-*`, CxG collection id, …).
-2. Tell the user which accession you found; confirm before starting downloads.
-3. Then run the flow above with the confirmed accession.
+You (the agent) are the paper extractor. Resolve **paper → accession(s)**
+yourself before invoking the CLI.
 
-Papers that deposit only to controlled-access repositories (dbGaP, EGA) are
-**out of scope** for standl — flag to the user.
+### 1. Extract the paper — try these sources in order until one works
+
+1. **WebFetch the DOI URL** with a specific prompt (Data availability
+   section verbatim + every accession + data type per accession). Works
+   for bioRxiv, medRxiv, eLife, most open-access journals, and many PMC
+   pages.
+2. **`curl -sL -A "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36" <URL>`**
+   to disk, then grep/parse locally. Works for Nature / Science / Cell
+   where WebFetch hits 303 redirect loops — a realistic browser UA
+   makes the server return the real HTML (the body contains
+   accessions even on the `cookies_not_supported` landing page).
+3. **Europe PMC / PMC OA** full-text XML, if the paper has a PMCID.
+   Endpoints: `https://europepmc.org/article/MED/<pmid>` or
+   `https://www.ncbi.nlm.nih.gov/pmc/articles/<pmcid>/`. Most reliable
+   for open-access content.
+4. **Nature `__NEXT_DATA__`**: for `nature.com/articles/s*-*-*` pages,
+   the full structured article metadata (including Data availability)
+   is embedded in `<script id="__NEXT_DATA__">{...}</script>`.
+   Extract and JSON-parse it if HTML scraping fails.
+5. **OpenAlex / Semantic Scholar / CrossRef** for structured metadata.
+   Accessions sometimes surface in abstracts/summaries here when the
+   publisher page is inaccessible.
+6. If all else fails, ask the user to paste the Data availability
+   paragraph, or to provide the accession directly.
+
+### 2. Classify every accession by data type
+
+From the extracted Data availability text, enumerate each accession and
+what it contains:
+
+- `GSE*` / `GSM*` — single-cell RNA-seq, bulk RNA-seq, scATAC-seq,
+  microarray? (GEO series titles and the paper's Methods usually say
+  explicitly)
+- `PRJNA*` / `SRP*` — raw sequencing reads (may duplicate the GEO
+  supplementary)
+- `E-MTAB-*` — ArrayExpress, any modality
+- CellxGene UUID / collection id — processed scRNA h5ad
+- Zenodo / Figshare DOIs — processed deposits, cell-type annotations,
+  supplementary tables
+- `phs*` (dbGaP), EGA ids — **controlled-access** (see §4)
+
+### 3. Pick (or disambiguate) the accession(s) to download
+
+- If the user asked for a **specific modality** (e.g. "scRNA-seq") and
+  exactly one accession matches → proceed with it.
+- If multiple accessions match → **tell the user what you found**, let
+  them pick, or run the download flow once per chosen accession.
+- If the user said nothing about modality → default to scRNA-seq for
+  scRNA-seq-oriented pipelines (stan* family), but confirm.
+
+### 4. Hand off to the deterministic CLI flow
+
+Only now run `standl run <accession> -o <outdir>`. From this point the
+GEO / ArrayExpress / CxG extractor takes over — that's its happy path.
+
+### 5. Out of scope
+
+- **Controlled-access** repos (dbGaP, EGA): standl cannot download them.
+  Flag to the user; don't attempt.
+- **Zero data-availability accessions disclosed**: some papers
+  (especially secondary analyses) cite only others' accessions. Walk
+  the user through what you found and stop.
+
+### Worked example (Nature with IDP redirect)
+
+Input: `https://doi.org/10.1038/s41586-025-09824-z`
+
+1. WebFetch → 303 redirect loop (Nature IDP).
+2. `curl -sL -A "Mozilla/5.0 …"` → 859 KB HTML including
+   > *All transcriptional data generated in the current study were
+   > deposited at NCBI GEO: **GSE253056** (bulk RNA-seq) and **GSE284080**
+   > (scRNA-seq).*
+3. Classify: GSE253056=bulk, GSE284080=scRNA-seq.
+4. The stan* pipeline curates scRNA-seq → pick **GSE284080**.
+5. `standl run GSE284080 -o <outdir>` → completes in ~30 s, 10 samples,
+   all audit checks pass.
 
 ## Rescue flow: `data_layout` failure (pooled series-level data)
 
