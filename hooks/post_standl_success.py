@@ -31,6 +31,12 @@ _STANDL_CMD = re.compile(
     r"(?:^|[\s;|&\n])standl\s+(?:run|validate|meta-check)\b"
 )
 
+# Silence false positives from package-manager invocations.
+_PKG_MGR_CMD = re.compile(
+    r"\b(?:pip|pip3|conda|mamba|micromamba|uv|poetry|pipx)"
+    r"\s+(?:install|uninstall|add|remove|show|list|search|info|update|upgrade|sync)\b"
+)
+
 _HANDOFF = (
     "✅ standl 执行成功。在 stan* 家族流水线里,standl 的下游是 **stanobj**。\n"
     "\n"
@@ -110,9 +116,22 @@ def _exit_code(payload: dict) -> int:
 def main() -> int:
     payload = _read_payload()
     cmd = _get_bash_command(payload)
-    if not cmd or not _STANDL_CMD.search(cmd):
+    if not cmd:
         return 0
     if _exit_code(payload) != 0:
+        return 0
+
+    # Split by shell operators so chained commands like
+    # ``pip install standl && standl run ...`` still trigger on the run
+    # segment while the install segment is skipped.
+    matched = False
+    for seg in re.split(r"(?:&&|\|\||;|\|)", cmd):
+        if _PKG_MGR_CMD.search(seg):
+            continue
+        if _STANDL_CMD.search(seg):
+            matched = True
+            break
+    if not matched:
         return 0
 
     out = {
