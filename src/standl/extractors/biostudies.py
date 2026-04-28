@@ -112,6 +112,196 @@ def _attrs_to_dict(attrs: Any) -> dict[str, str]:
     return out
 
 
+def _fetch_sdrf(accession: str, sdrf_path: str,
+                cache_dir: Path | None) -> str | None:
+    """Download an SDRF text file from the BioStudies file area, with
+    optional disk caching. Returns the raw TSV text, or ``None`` on
+    fetch failure.
+    """
+    cache_file = (cache_dir / f"biostudies_{accession}_sdrf.txt"
+                  if cache_dir is not None else None)
+    if cache_file is not None and cache_file.is_file():
+        return cache_file.read_text()
+
+    import requests
+    url = f"{FILES_BASE}/{accession}/{sdrf_path}"
+    try:
+        r = requests.get(url, timeout=30)
+        r.raise_for_status()
+    except Exception:
+        return None
+    text = r.text
+    if cache_file is not None:
+        cache_dir.mkdir(parents=True, exist_ok=True)  # type: ignore[union-attr]
+        cache_file.write_text(text)
+    return text
+
+
+_SDRF_BRACKET_RE = re.compile(r"^([A-Za-z ]+?)\s*\[([^\]]+)\]\s*$")
+
+
+def _normalize_sdrf_key(col: str) -> str | None:
+    """
+    Map SDRF column headers to compact, snake_case extra keys.
+
+    Handled prefixes (case-insensitive):
+      - ``Characteristics[organism part]``  → ``organism_part``
+      - ``Factor Value[cell type]``         → ``factor_cell_type``
+      - ``Comment[ENA_RUN]`` / ``[ENA_SAMPLE]`` / ``[BioSD_SAMPLE]``
+                                            → ``ena_run`` / ``ena_sample``
+                                              / ``biosd_sample``
+      - ``Source Name`` (special-cased upstream — used as the join key)
+
+    Other ``Comment[*]`` columns (file URLs, library prep parameters
+    that aren't downstream-useful) are dropped to keep ``extra`` tidy.
+
+    Returns ``None`` for headers we don't want to surface.
+    """
+    if col is None:
+        return None
+    raw = col.strip()
+    if not raw:
+        return None
+
+    # Source Name is the join key, not a payload column.
+    if raw.lower() == "source name":
+        return None
+
+    m = _SDRF_BRACKET_RE.match(raw)
+    if m:
+        prefix = m.group(1).strip().lower()
+        inner = m.group(2).strip().lower()
+        if prefix == "characteristics":
+            return _slugify_sdrf(inner)
+        if prefix == "factor value":
+            return f"factor_{_slugify_sdrf(inner)}"
+        if prefix == "comment":
+            # Whitelist Comments we care about; everything else gets
+            # dropped to keep extra dictionaries small.
+            keep = {
+                "ena_run", "ena_sample", "ena_experiment", "ena_study",
+                "biosd_sample", "library_layout", "library_strategy",
+                "library_source", "library_selection", "instrument",
+                "instrument model", "single cell isolation",
+            }
+            inner_norm = _slugify_sdrf(inner)
+            return inner_norm if inner_norm in {_slugify_sdrf(k) for k in keep} \
+                else None
+        return None
+
+    # Bare headers (no brackets) — slugify but only keep a small set
+    # of common ones; SDRF files have lots of free-form columns.
+    bare_keep = {"protocol_ref", "term_source_ref", "performer"}
+    s = _slugify_sdrf(raw)
+    return s if s in bare_keep else None
+
+
+def _slugify_sdrf(s: str) -> str:
+    """SDRF-specific slug: lowercase, spaces → underscore, drop punctuation."""
+    out = re.sub(r"[^a-z0-9]+", "_", s.lower()).strip("_")
+    return out or "x"
+
+
+def _parse_sdrf(text: str) -> list[dict[str, str]]:
+    """Parse an SDRF TSV string into a list of row dicts.
+
+    Each dict has its ``Source Name`` value under ``__source_name`` and
+    every other column normalised via :func:`_normalize_sdrf_key`.
+    Headers we don't want to surface (random ``Comment[...]`` columns)
+    are dropped silently. Rows with no ``Source Name`` are dropped — we
+    can't join them.
+    """
+    if not text:
+        return []
+    lines = text.replace("\r\n", "\n").split("\n")
+    if not lines or not lines[0]:
+        return []
+    headers = [h.strip() for h in lines[0].split("\t")]
+    # Find Source Name column index (case-insensitive)
+    source_idx = next(
+        (i for i, h in enumerate(headers) if h.strip().lower() == "source name"),
+        None,
+    )
+    if source_idx is None:
+        return []
+    norm_keys = [_normalize_sdrf_key(h) for h in headers]
+
+    rows: list[dict[str, str]] = []
+    for line in lines[1:]:
+        if not line.strip():
+            continue
+        cells = line.split("\t")
+        if len(cells) <= source_idx:
+            continue
+        source_name = cells[source_idx].strip()
+        if not source_name:
+            continue
+        row: dict[str, str] = {"__source_name": source_name}
+        for key, val in zip(norm_keys, cells):
+            if key is None:
+                continue
+            v = val.strip()
+            if not v:
+                continue
+            # Last write wins on duplicate normalised keys (e.g. multiple
+            # Comment columns mapping to the same slug). Same-name SDRF
+            # columns are rare; not worth carrying lists.
+            row[key] = v
+        rows.append(row)
+    return rows
+
+
+def _inject_sdrf_into_samples(
+    samples: list[PartialSample], sdrf_rows: list[dict[str, str]]
+) -> int:
+    """Merge SDRF row-level fields into ``sample.extra``. Returns the
+    number of samples that received at least one new key.
+
+    Match strategy (in order):
+      1. Exact ``Source Name`` == ``sample.sample_id``.
+      2. Slug match: ``_slug(source_name)`` == ``sample.sample_id``.
+      3. ENA run / ENA sample == sample_id (covers cases where the
+         BioStudies sample_id was derived from the ENA accession).
+
+    Multiple SDRF rows mapping to the same sample (multi-lane runs)
+    fold into the same extra dict; on key collision the *first* row's
+    value wins, since later rows would just be re-deposits of the same
+    biological sample.
+    """
+    if not sdrf_rows:
+        return 0
+
+    # Build a lookup keyed by every plausible identifier
+    by_key: dict[str, dict[str, str]] = {}
+    for row in sdrf_rows:
+        sn = row["__source_name"]
+        for key in (sn, _slug(sn)):
+            by_key.setdefault(key, row)
+        for ena_key in ("ena_run", "ena_sample"):
+            v = row.get(ena_key)
+            if v:
+                by_key.setdefault(v, row)
+
+    n_hit = 0
+    for s in samples:
+        row = by_key.get(s.sample_id) or by_key.get(_slug(s.sample_id))
+        if row is None:
+            continue
+        added = 0
+        for key, val in row.items():
+            if key.startswith("__"):
+                continue
+            if key in s.extra:
+                continue  # don't clobber attributes already present
+            s.extra[key] = _pv(
+                str(val)[:500], f"sdrf.{key}", confidence=0.85,
+            )
+            added += 1
+        if added:
+            n_hit += 1
+    return n_hit
+
+
 def _is_raw_only(name: str) -> bool:
     n = name.lower()
     # Check longest suffix first so `.fastq.gz` wins over `.gz`.
@@ -221,7 +411,7 @@ class BioStudiesExtractor:
                 failures={"api_files": f"{type(e).__name__}: {e}"},
             )
 
-        return _build_partial(study, files_resp, accession)
+        return _build_partial(study, files_resp, accession, cache_dir)
 
 
 def _build_sample(
@@ -272,6 +462,7 @@ def _build_sample(
 
 def _build_partial(
     study: dict[str, Any], files_resp: dict[str, Any], accession: str,
+    cache_dir: Path | None = None,
 ) -> PartialDesign:
     failures: dict[str, str] = {}
 
@@ -357,6 +548,37 @@ def _build_partial(
             s.extra["biostudies_raw_file_count"] = _pv(
                 str(raw_count), "files.data (fastq/bam/sra excluded)",
             )
+
+    # SDRF rich-column expansion. ArrayExpress / BioStudies ship a
+    # tab-separated `*.sdrf.txt` alongside the data files, with
+    # Characteristics[*] and Factor Value[*] columns that carry the
+    # per-sample biology (organism part, sex, age, disease, instrument
+    # …). Without parsing it, downstream stages have no per-sample
+    # metadata to broadcast onto cells. We download the file once,
+    # parse it, and merge each row into the matching sample's `.extra`.
+    sdrf_record = next(
+        (
+            f for f in all_data if isinstance(f, dict)
+            and (n := str(f.get("path") or f.get("Name") or "")).lower().endswith(
+                (".sdrf.txt", ".sdrf.tsv", ".sdrf")
+            )
+        ),
+        None,
+    )
+    if sdrf_record is not None:
+        sdrf_path = sdrf_record.get("path") or sdrf_record.get("Name")
+        text = _fetch_sdrf(accession, str(sdrf_path), cache_dir)
+        if text:
+            rows = _parse_sdrf(text)
+            n_hit = _inject_sdrf_into_samples(samples, rows)
+            if n_hit == 0 and rows:
+                failures["sdrf_match"] = (
+                    f"sdrf parsed {len(rows)} row(s) but none matched the "
+                    f"{len(samples)} BioStudies-derived sample(s) by Source "
+                    f"Name / slug / ENA accession"
+                )
+        elif sdrf_path:
+            failures["sdrf_fetch"] = f"could not download {sdrf_path}"
 
     title = merged.get("title")
 

@@ -307,3 +307,126 @@ def test_extract_populates_file_meta_size_only(monkeypatch, tmp_path: Path):
         assert "size_bytes" in m
         assert "md5" not in m
         assert "sha256" not in m
+
+
+# ===========================================================================
+# SDRF rich-column expansion
+# ===========================================================================
+
+class TestSdrfNormalizeKey:
+    def test_characteristics_to_snake(self):
+        from standl.extractors.biostudies import _normalize_sdrf_key
+        assert _normalize_sdrf_key("Characteristics[organism part]") == "organism_part"
+        assert _normalize_sdrf_key("Characteristics[Sex]") == "sex"
+        assert _normalize_sdrf_key("Characteristics[disease]") == "disease"
+
+    def test_factor_value_prefixed(self):
+        from standl.extractors.biostudies import _normalize_sdrf_key
+        assert _normalize_sdrf_key("Factor Value[cell type]") == "factor_cell_type"
+
+    def test_comment_whitelisted(self):
+        from standl.extractors.biostudies import _normalize_sdrf_key
+        assert _normalize_sdrf_key("Comment[ENA_RUN]") == "ena_run"
+        assert _normalize_sdrf_key("Comment[BioSD_SAMPLE]") == "biosd_sample"
+        # Random Comment columns get dropped
+        assert _normalize_sdrf_key("Comment[RANDOM]") is None
+        assert _normalize_sdrf_key("Comment[FASTQ_URI]") is None
+
+    def test_source_name_dropped(self):
+        from standl.extractors.biostudies import _normalize_sdrf_key
+        # Source Name is the join key, not a payload column
+        assert _normalize_sdrf_key("Source Name") is None
+
+    def test_unknown_bare_dropped(self):
+        from standl.extractors.biostudies import _normalize_sdrf_key
+        assert _normalize_sdrf_key("Date") is None
+        assert _normalize_sdrf_key("") is None
+        assert _normalize_sdrf_key(None) is None
+
+
+class TestSdrfParse:
+    def _sample_sdrf(self) -> str:
+        return "\n".join([
+            "Source Name\tCharacteristics[organism part]\tCharacteristics[sex]"
+            "\tFactor Value[cell type]\tComment[ENA_RUN]\tComment[FASTQ_URI]",
+            "sampleA\tlung\tfemale\tT cell\tERR1234567\tftp://nope/sampleA_R1.fq.gz",
+            "sampleB\tliver\tmale\thepatocyte\tERR1234568\tftp://nope/sampleB_R1.fq.gz",
+        ])
+
+    def test_extracts_normalised_keys(self):
+        from standl.extractors.biostudies import _parse_sdrf
+        rows = _parse_sdrf(self._sample_sdrf())
+        assert len(rows) == 2
+        a = next(r for r in rows if r["__source_name"] == "sampleA")
+        assert a["organism_part"] == "lung"
+        assert a["sex"] == "female"
+        assert a["factor_cell_type"] == "T cell"
+        assert a["ena_run"] == "ERR1234567"
+        # Random Comment column dropped
+        assert "fastq_uri" not in a
+
+    def test_empty_text_returns_empty(self):
+        from standl.extractors.biostudies import _parse_sdrf
+        assert _parse_sdrf("") == []
+
+    def test_no_source_name_column_returns_empty(self):
+        from standl.extractors.biostudies import _parse_sdrf
+        assert _parse_sdrf("Foo\tBar\nx\ty\n") == []
+
+    def test_blank_source_name_skipped(self):
+        from standl.extractors.biostudies import _parse_sdrf
+        text = "Source Name\tCharacteristics[sex]\nsampleA\tfemale\n\tx\n"
+        rows = _parse_sdrf(text)
+        assert len(rows) == 1
+        assert rows[0]["__source_name"] == "sampleA"
+
+
+class TestSdrfInject:
+    def test_match_by_source_name(self):
+        from standl.schema import PartialSample
+        from standl.extractors.biostudies import _inject_sdrf_into_samples
+        samples = [PartialSample(sample_id="sampleA"),
+                   PartialSample(sample_id="sampleB")]
+        rows = [
+            {"__source_name": "sampleA", "organism_part": "lung",
+             "sex": "female", "factor_cell_type": "T cell"},
+            {"__source_name": "sampleB", "organism_part": "liver",
+             "sex": "male"},
+        ]
+        n = _inject_sdrf_into_samples(samples, rows)
+        assert n == 2
+        assert samples[0].extra["organism_part"].value == "lung"
+        assert samples[0].extra["sex"].value == "female"
+        assert samples[0].extra["factor_cell_type"].value == "T cell"
+        assert samples[1].extra["organism_part"].value == "liver"
+
+    def test_existing_extra_not_clobbered(self):
+        from standl.schema import PartialSample, ProvenancedValue
+        from standl.extractors.biostudies import _inject_sdrf_into_samples
+        s = PartialSample(sample_id="sampleA")
+        s.extra["sex"] = ProvenancedValue(
+            value="male", source="from-elsewhere", confidence=1.0,
+        )
+        rows = [{"__source_name": "sampleA", "sex": "female",
+                 "organism_part": "lung"}]
+        _inject_sdrf_into_samples([s], rows)
+        assert s.extra["sex"].value == "male"  # not clobbered
+        assert s.extra["organism_part"].value == "lung"  # added
+
+    def test_match_by_ena_run(self):
+        from standl.schema import PartialSample
+        from standl.extractors.biostudies import _inject_sdrf_into_samples
+        # The BioStudies sample_id was derived from the ENA run accession
+        s = PartialSample(sample_id="ERR1234567")
+        rows = [{"__source_name": "lab name 1", "ena_run": "ERR1234567",
+                 "organism_part": "lung"}]
+        n = _inject_sdrf_into_samples([s], rows)
+        assert n == 1
+        assert s.extra["organism_part"].value == "lung"
+
+    def test_no_rows_is_noop(self):
+        from standl.schema import PartialSample
+        from standl.extractors.biostudies import _inject_sdrf_into_samples
+        s = PartialSample(sample_id="sampleA")
+        assert _inject_sdrf_into_samples([s], []) == 0
+        assert s.extra == {}
